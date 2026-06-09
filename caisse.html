@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ParkBus • Caisse</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
+    
+    <style>
+        body { font-family: 'Inter', system_ui, sans-serif; }
+        .logo-font { font-family: 'Space Grotesk', sans-serif; }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-200 min-h-screen">
+
+    <nav class="bg-slate-900 border-b border-slate-700 sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-8 py-6 flex items-center justify-between">
+            <div class="flex items-center gap-x-4">
+                <i class="fa-solid fa-bus text-4xl text-blue-500"></i>
+                <div>
+                    <span class="logo-font text-3xl font-semibold tracking-tighter">ParkBus</span>
+                    <span class="block text-xs text-slate-500 -mt-1">MONITEUR CAISSE</span>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="max-w-7xl mx-auto px-8 py-10">
+        <div class="bg-slate-900 border border-slate-700 rounded-3xl p-8">
+            <div class="flex justify-between items-center mb-10">
+                <h1 class="text-3xl font-semibold">Flux d'arrivées en temps réel</h1>
+                
+                <div class="relative w-96">
+                    <input type="text" id="search-bar" 
+                           class="w-full bg-slate-950 border border-slate-700 rounded-3xl py-5 pl-12 text-lg"
+                           placeholder="Rechercher par école ou plaque...">
+                    <i class="fa-solid fa-magnifying-glass absolute left-5 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                </div>
+            </div>
+
+            <div class="overflow-x-auto rounded-3xl border border-slate-700">
+                <table class="w-full" id="buses-table">
+                    <thead>
+                        <tr class="border-b border-slate-700 text-xs uppercase tracking-widest text-slate-400">
+                            <th class="py-6 px-8 text-left">Heure</th>
+                            <th class="py-6 px-8 text-left">Plaque</th>
+                            <th class="py-6 px-8 text-left">Établissement</th>
+                            <th class="py-6 px-8 text-left">Provenance</th>
+                            <th class="py-6 px-8 text-center">Élèves</th>
+                            <th class="py-6 px-8 text-center">Adultes</th>
+                            <th class="py-6 px-8 text-center">Signature</th>
+                        </tr>
+                    </thead>
+                    <tbody id="buses-list" class="text-sm"></tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+        import { getFirestore, collection, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+
+        const firebaseConfig = { /* TES CLÉS ICI */ };
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        let allBuses = [];
+
+        const q = query(collection(db, "buses"), orderBy("timestamp", "desc"));
+
+        onSnapshot(q, (snapshot) => {
+            allBuses = [];
+            snapshot.forEach(doc => allBuses.push(doc.data()));
+            renderTable(allBuses);
+        });
+
+        function renderTable(data) {
+            const tbody = document.getElementById('buses-list');
+            tbody.innerHTML = '';
+
+            data.forEach(bus => {
+                const date = bus.timestamp.toDate ? bus.timestamp.toDate() : new Date(bus.timestamp);
+                const time = date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+
+                const tr = document.createElement('tr');
+                tr.className = "border-b border-slate-700 hover:bg-slate-800 transition-colors";
+                tr.innerHTML = `
+                    <td class="py-6 px-8 font-mono">${time}</td>
+                    <td class="py-6 px-8"><span class="bg-slate-800 px-4 py-2 rounded-2xl font-mono">${bus.plaque}</span></td>
+                    <td class="py-6 px-8 font-medium">${bus.ecole}</td>
+                    <td class="py-6 px-8 text-slate-400">${bus.ville} (${bus.cp})</td>
+                    <td class="py-6 px-8 text-center"><span class="bg-emerald-500/10 text-emerald-400 px-4 py-2 rounded-2xl">${bus.nb_enfants}</span></td>
+                    <td class="py-6 px-8 text-center"><span class="bg-amber-500/10 text-amber-400 px-4 py-2 rounded-2xl">${bus.nb_adultes}</span></td>
+                    <td class="py-6 px-8 text-center">
+                        <img src="${bus.signature_url}" class="h-12 mx-auto rounded-xl border border-slate-600" alt="">
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        document.getElementById('search-bar').addEventListener('input', (e) => {
+            const term = e.target.value.toLowerCase();
+            const filtered = allBuses.filter(b => 
+                b.ecole.toLowerCase().includes(term) || b.plaque.toLowerCase().includes(term)
+            );
+            renderTable(filtered);
+        });
+    </script>
+</body>
+</html>
