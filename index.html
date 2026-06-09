@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ParkBus Manager</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="logo">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path><line x1="4" y1="22" x2="4" y2="15"></line></svg>
+            ParkBus
+        </div>
+        <div class="tabs">
+            <button onclick="switchTab('agent')" class="active" id="tab-agent">Agent (Mobile)</button>
+            <button onclick="switchTab('caisse')" id="tab-caisse">Caisse (PC)</button>
+        </div>
+    </nav>
+
+    <main id="view-agent" class="view active">
+        <div class="card">
+            <h2>Enregistrer un bus</h2>
+            
+            <div class="camera-section">
+                <video id="camera-feed" autoplay playsinline></video>
+                <button type="button" id="btn-scan" class="btn btn-secondary">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg>
+                    Scanner Plaque (OCR)
+                </button>
+                <p id="ocr-status" class="status-text"></p>
+            </div>
+
+            <form id="bus-form">
+                <div class="form-group">
+                    <label>Plaque d'immatriculation</label>
+                    <input type="text" id="plaque" placeholder="AB-123-CD" required>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Couleur du bus</label>
+                        <input type="text" id="couleur" required>
+                    </div>
+                    <div class="form-group">
+                        <label>École / Organisation</label>
+                        <input type="text" id="ecole" required>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Code Postal</label>
+                        <input type="number" id="cp" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Ville</label>
+                        <input type="text" id="ville" required>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Nombre d'enfants</label>
+                        <input type="number" id="nb_enfants" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Accompagnateurs</label>
+                        <input type="number" id="nb_adultes" required>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Nom du responsable</label>
+                    <input type="text" id="responsable" required>
+                </div>
+
+                <div class="form-group">
+                    <label>Signature du responsable</label>
+                    <canvas id="signature-pad"></canvas>
+                    <button type="button" class="btn btn-text" onclick="clearSignature()">Effacer</button>
+                </div>
+
+                <button type="submit" class="btn btn-primary" id="btn-submit">Valider l'entrée</button>
+            </form>
+        </div>
+    </main>
+
+    <main id="view-caisse" class="view">
+        <div class="card">
+            <div class="caisse-header">
+                <h2>Arrivées en temps réel</h2>
+                <input type="text" id="search-bar" placeholder="Rechercher école ou plaque...">
+            </div>
+            <div class="table-container">
+                <table id="buses-table">
+                    <thead>
+                        <tr>
+                            <th>Heure</th>
+                            <th>Plaque</th>
+                            <th>École</th>
+                            <th>Ville</th>
+                            <th>Enfants</th>
+                            <th>Adultes</th>
+                            <th>Signature</th>
+                        </tr>
+                    </thead>
+                    <tbody id="buses-list">
+                        </tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <script type="module" src="app.js"></script>
+</body>
+</html>
