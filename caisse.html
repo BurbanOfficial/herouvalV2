@@ -536,10 +536,16 @@
                 doc.setFont(undefined, 'normal');
                 y += 5;
                 
-                // Generate QR
-                const qrCanvas = document.createElement('canvas');
+                // Generate QR - must be attached to DOM for rendering
+                const qrContainer = document.createElement('div');
+                qrContainer.style.position = 'fixed';
+                qrContainer.style.left = '-9999px';
+                qrContainer.style.top = '0';
+                document.body.appendChild(qrContainer);
+                
+                let qrDataUrl = null;
                 await new Promise(resolve => {
-                    new QRCode(qrCanvas, {
+                    const qrCode = new QRCode(qrContainer, {
                         text: group.id,
                         width: 150,
                         height: 150,
@@ -547,11 +553,27 @@
                         colorLight: '#ffffff',
                         correctLevel: QRCode.CorrectLevel.H
                     });
-                    setTimeout(resolve, 200);
+                    
+                    // Wait for QR to be fully rendered
+                    const checkQR = () => {
+                        const canvas = qrContainer.querySelector('canvas');
+                        if (canvas && canvas.width > 0) {
+                            qrDataUrl = canvas.toDataURL('image/png');
+                            resolve();
+                        } else {
+                            setTimeout(checkQR, 50);
+                        }
+                    };
+                    setTimeout(checkQR, 100);
                 });
                 
-                const qrDataUrl = qrCanvas.toDataURL('image/png');
-                doc.addImage(qrDataUrl, 'PNG', 75, y, 60, 60);
+                // Clean up
+                document.body.removeChild(qrContainer);
+                
+                // Add QR to PDF
+                if (qrDataUrl) {
+                    doc.addImage(qrDataUrl, 'PNG', 75, y, 60, 60);
+                }
                 
                 doc.setFontSize(10);
                 doc.setTextColor(100, 100, 100);

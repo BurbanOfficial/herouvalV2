@@ -20,25 +20,44 @@ const app = {
     mockGroups: [],
     
     init() {
+        this.currentWeek = this.getWeekNumber();
+        
         if (typeof firebase !== 'undefined') {
             try {
                 firebase.initializeApp(firebaseConfig);
                 this.db = firebase.firestore();
-                console.log('Firebase initialized successfully');
+                
+                // Test connectivity silently
+                this.testConnectivity();
+                
             } catch (err) {
                 console.error('Firebase init error:', err);
-                this.offlineMode = true;
+                this.enableOfflineMode();
             }
         } else {
             console.warn('Firebase SDK not loaded');
-            this.offlineMode = true;
+            this.enableOfflineMode();
         }
-        
-        this.currentWeek = this.getWeekNumber();
-        
-        if (this.offlineMode) {
-            console.log('Running in OFFLINE/DEMO mode');
+    },
+
+    async testConnectivity() {
+        try {
+            // Quick test to see if Firestore is accessible
+            await Promise.race([
+                this.db.collection('groups').limit(1).get(),
+                new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 3000))
+            ]);
+            console.log('✅ Firebase connected');
+        } catch (err) {
+            console.warn('⚠️ Firebase unavailable, switching to offline mode:', err.message);
+            this.enableOfflineMode();
         }
+    },
+
+    enableOfflineMode() {
+        this.offlineMode = true;
+        this.loadFromLocalStorage();
+        console.log('📴 Running in OFFLINE mode - data saved to localStorage');
     },
 
     // Get current week number for group ID generation
@@ -215,14 +234,18 @@ const app = {
     },
 
     // Listen to real-time group updates (with polling fallback)
-    listenToGroups(callback, forToday = true) {
+    async listenToGroups(callback, forToday = true) {
         // First call with local data
         this.loadFromLocalStorage();
         const localGroups = this.getLocalGroups(forToday);
         this.groups = localGroups;
         callback(localGroups);
 
+        // Wait a bit for connectivity test to complete
+        await new Promise(r => setTimeout(r, 500));
+
         if (!this.db || this.offlineMode) {
+            console.log('Using localStorage polling for realtime updates');
             // Poll localStorage every 2 seconds for updates
             const interval = setInterval(() => {
                 this.loadFromLocalStorage();
@@ -234,6 +257,11 @@ const app = {
             }, 2000);
             
             return () => clearInterval(interval);
+        }
+
+        // Don't try Firestore if we're offline
+        if (this.offlineMode) {
+            return () => {};
         }
 
         try {
@@ -261,7 +289,7 @@ const app = {
                     this.groups = groups;
                     callback(groups);
                 }, err => {
-                    console.error('Listen error:', err);
+                    console.warn('Firestore listen failed, using offline mode:', err.message);
                     this.offlineMode = true;
                     // Fallback to polling
                     const interval = setInterval(() => {
@@ -273,9 +301,8 @@ const app = {
                     return () => clearInterval(interval);
                 });
         } catch (err) {
-            console.error('Firestore listen error:', err);
+            console.warn('Firestore error, using offline mode:', err.message);
             this.offlineMode = true;
-            callback(localGroups);
             return () => {};
         }
     },
