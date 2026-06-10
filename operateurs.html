@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Opérateurs - Scan QR</title>
     <link rel="manifest" href="manifest.json">
-    <meta name="theme-color" content="#1a1a2e">
+    <meta name="theme-color" content="#000000">
     <link rel="stylesheet" href="styles.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
@@ -15,8 +15,13 @@
 <body>
     <div class="container">
         <header class="page-header">
-            <a href="index.html" class="back-link">← Retour</a>
-            <h1>🎢 Opérateurs</h1>
+            <a href="index.html" class="back-link">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <path d="M19 12H5M12 19l-7-7 7-7"/>
+                </svg>
+                Retour
+            </a>
+            <h1>Opérateurs</h1>
             <div></div>
         </header>
 
@@ -38,39 +43,55 @@
             </div>
 
             <button class="btn btn-primary btn-block" id="confirmAttraction">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="vertical-align: middle; margin-right: 0.5rem;">
+                    <circle cx="12" cy="12" r="10"/>
+                    <polyline points="12 6 12 12 16 14"/>
+                </svg>
                 Confirmer et ouvrir le scanner
             </button>
         </section>
 
         <!-- Scanner QR -->
         <section id="scannerSection" class="form-container hidden">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                <h2>Scanner un groupe</h2>
-                <button class="btn btn-outline" id="changeAttraction">
-                    Changer d'attraction
-                </button>
+            <!-- Attraction header -->
+            <div class="attraction-header" id="attractionHeader">
+                <div class="attraction-header-label">Attraction</div>
+                <div class="attraction-header-name" id="attractionName"></div>
+            </div>
+
+            <!-- Scanned group info (hidden initially) -->
+            <div class="scanned-group-info hidden" id="scannedGroupInfo">
+                <div class="scanned-group-label">Groupe scanné</div>
+                <div class="scanned-group-name" id="scannedGroupName"></div>
             </div>
 
             <div class="scanner-container" id="qrScanner">
                 <div id="reader" style="width: 100%; max-width: 600px; margin: 0 auto;"></div>
             </div>
 
-            <div class="scanner-result hidden" id="scanResult">
-                <p>Groupe scanné: <strong id="scannedGroupId"></strong></p>
+            <div style="text-align: center; margin-top: 1rem;">
+                <button class="btn btn-outline" id="changeAttraction">
+                    Changer d'attraction
+                </button>
             </div>
         </section>
 
         <!-- Résultat de validation -->
         <section id="validationResult" class="hidden">
             <div class="operator-status" id="statusContainer">
-                <div class="status-icon" id="statusIcon">⏳</div>
+                <!-- Animated SVG icon container -->
+                <div class="status-icon-animated" id="statusIconContainer">
+                    <svg viewBox="0 0 100 100" id="statusSvg">
+                        <!-- Circle and paths will be injected by JS -->
+                    </svg>
+                </div>
                 <div class="status-text" id="statusText">
                     En attente du scan...
                 </div>
             </div>
 
             <div class="group-validation-info hidden" id="groupInfo">
-                <h3 style="margin-bottom: 1.5rem; color: var(--highlight);">Informations du groupe</h3>
+                <h3 style="margin-bottom: 1.5rem; font-weight: 400;">Informations du groupe</h3>
                 
                 <div class="validation-row">
                     <span>Groupe:</span>
@@ -89,14 +110,14 @@
                     <strong id="valTotal"></strong>
                 </div>
 
-                <div style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border);">
+                <div style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--gray-200);">
                     <div class="validation-row">
                         <span>Attraction:</span>
                         <strong id="valAttraction"></strong>
                     </div>
                     <div class="validation-row">
                         <span>Places autorisées:</span>
-                        <strong id="valAllowed" style="color: var(--success); font-size: 1.2rem;"></strong>
+                        <strong id="valAllowed" style="color: #22c55e; font-size: 1.2rem;"></strong>
                     </div>
                     <div class="validation-row">
                         <span>Places déjà utilisées:</span>
@@ -104,7 +125,7 @@
                     </div>
                     <div class="validation-row">
                         <span>Places restantes:</span>
-                        <strong id="valRemaining" style="color: var(--highlight); font-size: 1.3rem;"></strong>
+                        <strong id="valRemaining" style="color: var(--black); font-size: 1.3rem;"></strong>
                     </div>
                 </div>
             </div>
@@ -117,13 +138,20 @@
             </div>
 
             <div class="btn-group" id="actionButtons" style="display: none;">
-                <button class="btn btn-primary btn-block" id="validateEntry">
-                    ✓ Valider l'entrée
+                <button class="btn btn-success btn-block" id="validateEntry">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 0.5rem;">
+                        <polyline points="20 6 9 17 4 12"/>
+                    </svg>
+                    Valider l'entrée
                 </button>
             </div>
 
-            <button class="btn btn-secondary btn-block mt-2" id="scanNext" style="display: none;">
-                📷 Scanner un autre groupe
+            <button class="btn btn-outline btn-block mt-2" id="scanNext" style="display: none;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="vertical-align: middle; margin-right: 0.5rem;">
+                    <rect x="3" y="7" width="18" height="12" rx="2"/>
+                    <circle cx="12" cy="13" r="3"/>
+                </svg>
+                Scanner un autre groupe
             </button>
         </section>
     </div>
@@ -176,6 +204,9 @@
                     return;
                 }
 
+                // Show attraction name in header
+                document.getElementById('attractionName').textContent = this.selectedAttractionName;
+
                 document.getElementById('attractionSelect').classList.add('hidden');
                 document.getElementById('scannerSection').classList.remove('hidden');
                 document.getElementById('validationResult').classList.remove('hidden');
@@ -220,9 +251,6 @@
                 // Stop scanning temporarily
                 this.stopScanner();
 
-                document.getElementById('scannedGroupId').textContent = groupId;
-                document.getElementById('scanResult').classList.remove('hidden');
-
                 try {
                     const group = await app.getGroup(groupId);
                     
@@ -232,6 +260,14 @@
                     }
 
                     this.currentGroup = group;
+                    
+                    // Hide scanner container after successful scan
+                    document.getElementById('qrScanner').classList.add('hidden');
+                    
+                    // Show scanned group info with group ID instead of school name
+                    document.getElementById('scannedGroupInfo').classList.remove('hidden');
+                    document.getElementById('scannedGroupName').textContent = group.id;
+                    
                     this.validateGroupAccess(group);
 
                 } catch (err) {
@@ -290,18 +326,33 @@
 
             showStatus(message, type) {
                 const container = document.getElementById('statusContainer');
-                const icon = document.getElementById('statusIcon');
+                const iconContainer = document.getElementById('statusIconContainer');
                 const text = document.getElementById('statusText');
+                const svg = document.getElementById('statusSvg');
 
                 text.textContent = message;
                 text.className = 'status-text ' + type;
 
+                // Update SVG based on type
+                iconContainer.className = 'status-icon-animated ' + type;
+                
                 if (type === 'allowed') {
-                    icon.textContent = '✅';
-                    container.style.border = '2px solid var(--success)';
+                    // Green checkmark with circle
+                    svg.innerHTML = `
+                        <circle cx="50" cy="50" r="45" class="circle-path"/>
+                        <path d="M30 52 L43 65 L70 38" class="check-path"/>
+                    `;
+                } else if (type === 'denied') {
+                    // Red cross with circle
+                    svg.innerHTML = `
+                        <circle cx="50" cy="50" r="45" class="circle-path"/>
+                        <path d="M35 35 L65 65 M65 35 L35 65" class="cross-path"/>
+                    `;
                 } else {
-                    icon.textContent = '❌';
-                    container.style.border = '2px solid var(--highlight)';
+                    // Default - empty circle
+                    svg.innerHTML = `
+                        <circle cx="50" cy="50" r="45" stroke="var(--gray-400)" stroke-width="2" fill="none"/>
+                    `;
                 }
             },
 
@@ -372,14 +423,16 @@
             },
 
             resetScan() {
-                document.getElementById('scanResult').classList.add('hidden');
+                document.getElementById('scannedGroupInfo').classList.add('hidden');
                 document.getElementById('groupInfo').classList.add('hidden');
                 document.getElementById('activitiesContainer').classList.add('hidden');
                 document.getElementById('actionButtons').style.display = 'none';
                 document.getElementById('scanNext').style.display = 'none';
                 
+                // Show scanner again for next scan
+                document.getElementById('qrScanner').classList.remove('hidden');
+                
                 this.showStatus('En attente du scan...', '');
-                document.getElementById('statusContainer').style.border = 'none';
                 
                 this.startScanner();
             },

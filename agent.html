@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Agent - Enregistrement Bus</title>
     <link rel="manifest" href="manifest.json">
-    <meta name="theme-color" content="#1a1a2e">
+    <meta name="theme-color" content="#000000">
     <link rel="stylesheet" href="styles.css">
     <script src="https://unpkg.com/tesseract.js@4.1.1/dist/tesseract.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
@@ -16,142 +16,166 @@
     <div class="container">
         <header class="page-header">
             <a href="index.html" class="back-link">← Retour</a>
-            <h1>🚌 Enregistrement d'un Bus</h1>
+            <h1>Enregistrement Bus</h1>
             <div></div>
         </header>
 
+        <!-- Indicateur d'étapes -->
+        <nav class="steps" id="stepsIndicator">
+            <div class="step active" data-step="1">Plaque</div>
+            <div class="step" data-step="2">Groupe</div>
+            <div class="step" data-step="3">Signature</div>
+            <div class="step" data-step="4">Validation</div>
+        </nav>
+
         <!-- Étape 1: Scan Plaque -->
         <section id="step1" class="form-container">
-            <h2 class="mb-2">Étape 1 : Plaque d'immatriculation</h2>
-            
-            <div class="scanner-container" id="scannerContainer">
+            <div class="scanner-section">
                 <div class="camera-preview" id="cameraPreview">
-                    <p>Cliquez sur "Démarrer la caméra" pour scanner</p>
+                    <div class="camera-placeholder">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+                            <rect x="3" y="7" width="18" height="12" rx="2"/>
+                            <circle cx="12" cy="13" r="3"/>
+                        </svg>
+                        <p>Appareil photo</p>
+                    </div>
                 </div>
-                <div class="scanner-overlay hidden" id="scannerOverlay">
-                    <div class="scanner-line"></div>
+                
+                <p class="scan-hint">
+                    Viser une plaque d'immatriculation à environ 1,5 - 2 mètres
+                </p>
+
+                <div class="scan-actions">
+                    <button class="btn btn-primary" id="startCameraBtn">
+                        Activer la caméra
+                    </button>
+                    <button class="btn btn-secondary hidden" id="captureBtn">
+                        Capturer
+                    </button>
+                    <button class="btn btn-outline" id="manualBtn">
+                        Saisie manuelle
+                    </button>
                 </div>
             </div>
 
-            <div class="btn-group">
-                <button class="btn btn-primary" id="startCameraBtn">
-                    📷 Démarrer la caméra
-                </button>
-                <button class="btn btn-secondary hidden" id="captureBtn">
-                    📸 Capturer
-                </button>
-                <button class="btn btn-outline" id="manualBtn">
-                    ⌨️ Saisir manuellement
-                </button>
+            <div class="result-box hidden" id="plateResultBox">
+                <label>Plaque détectée</label>
+                <div class="result-value" id="plateResult"></div>
             </div>
 
-            <div class="scanner-result hidden" id="plateResult"></div>
-
-            <div class="form-group hidden" id="manualInputGroup">
-                <label for="manualPlate">Plaque d'immatriculation</label>
-                <input type="text" id="manualPlate" placeholder="AB-123-CD">
+            <div class="manual-input hidden" id="manualInputGroup">
+                <div class="form-group">
+                    <label for="manualPlate">Plaque d'immatriculation</label>
+                    <input type="text" id="manualPlate" placeholder="AB-123-CD" maxlength="9">
+                </div>
             </div>
 
             <button class="btn btn-success btn-block hidden" id="confirmPlateBtn">
-                Confirmer et continuer →
+                Continuer
             </button>
         </section>
 
         <!-- Étape 2: Informations Groupe -->
         <section id="step2" class="form-container hidden">
-            <h2 class="mb-2">Étape 2 : Informations du groupe</h2>
+            <div class="section-intro">
+                <h2>Informations du groupe</h2>
+            </div>
             
+            <div class="form-group">
+                <label for="schoolName">Nom de l'école ou organisation</label>
+                <input type="text" id="schoolName" required placeholder="Ex: École primaire Jules Ferry">
+            </div>
+
             <div class="form-row">
                 <div class="form-group">
-                    <label for="schoolName">Nom de l'école/organisation *</label>
-                    <input type="text" id="schoolName" required>
+                    <label for="city">Ville</label>
+                    <input type="text" id="city" required placeholder="Ex: Paris">
+                </div>
+                <div class="form-group">
+                    <label for="postalCode">Code postal</label>
+                    <input type="text" id="postalCode" pattern="[0-9]{5}" maxlength="5" required placeholder="75000">
                 </div>
             </div>
 
             <div class="form-row">
                 <div class="form-group">
-                    <label for="city">Ville *</label>
-                    <input type="text" id="city" required>
+                    <label for="childrenCount">Nombre d'enfants</label>
+                    <input type="number" id="childrenCount" min="1" required placeholder="0">
                 </div>
                 <div class="form-group">
-                    <label for="postalCode">Code postal *</label>
-                    <input type="text" id="postalCode" pattern="[0-9]{5}" maxlength="5" required>
-                </div>
-            </div>
-
-            <div class="form-row">
-                <div class="form-group">
-                    <label for="childrenCount">Nombre d'enfants *</label>
-                    <input type="number" id="childrenCount" min="1" required>
-                </div>
-                <div class="form-group">
-                    <label for="adultsCount">Nombre d'accompagnateurs *</label>
-                    <input type="number" id="adultsCount" min="1" required>
+                    <label for="adultsCount">Accompagnateurs</label>
+                    <input type="number" id="adultsCount" min="1" required placeholder="0">
                 </div>
             </div>
 
             <div class="btn-group">
-                <button class="btn btn-outline" id="backToStep1">← Retour</button>
+                <button class="btn btn-outline" id="backToStep1">Retour</button>
                 <button class="btn btn-success" id="confirmStep2">
-                    Continuer →
+                    Continuer
                 </button>
             </div>
         </section>
 
         <!-- Étape 3: Responsable et Signature -->
         <section id="step3" class="form-container hidden">
-            <h2 class="mb-2">Étape 3 : Responsable de la sortie</h2>
+            <div class="section-intro">
+                <h2>Responsable de la sortie</h2>
+            </div>
             
             <div class="form-row">
                 <div class="form-group">
-                    <label for="leaderLastName">Nom du responsable *</label>
-                    <input type="text" id="leaderLastName" required>
+                    <label for="leaderLastName">Nom</label>
+                    <input type="text" id="leaderLastName" required placeholder="Dupont">
                 </div>
                 <div class="form-group">
-                    <label for="leaderFirstName">Prénom du responsable *</label>
-                    <input type="text" id="leaderFirstName" required>
+                    <label for="leaderFirstName">Prénom</label>
+                    <input type="text" id="leaderFirstName" required placeholder="Marie">
                 </div>
             </div>
 
-            <div class="form-group">
-                <label>Signature du responsable *</label>
-                <div class="signature-container">
+            <div class="form-group signature-section">
+                <label>Signature</label>
+                <div class="signature-box">
                     <canvas id="signaturePad"></canvas>
+                    <p class="signature-hint">Signez dans le cadre ci-dessus</p>
                 </div>
-                <button class="btn btn-outline btn-sm" id="clearSignature" style="margin-top: 0.5rem;">
-                    Effacer la signature
+                <button class="btn btn-outline" id="clearSignature">
+                    Effacer
                 </button>
             </div>
 
             <div class="btn-group">
-                <button class="btn btn-outline" id="backToStep2">← Retour</button>
+                <button class="btn btn-outline" id="backToStep2">Retour</button>
                 <button class="btn btn-success" id="validateGroup">
-                    ✓ Valider le groupe
+                    Valider l'enregistrement
                 </button>
             </div>
         </section>
 
         <!-- Étape 4: QR Code Généré -->
         <section id="step4" class="form-container hidden">
-            <h2 class="text-center mb-2">Groupe Enregistré !</h2>
+            <div class="success-header">
+                <h2>Groupe enregistré</h2>
+                <p class="success-subtitle">Le groupe est enregistré et le QR code envoyé à la caisse</p>
+            </div>
             
-            <div class="qr-display">
+            <div class="qr-result">
                 <div id="qrcode"></div>
-                <div class="group-info">
-                    <div class="group-id" id="groupId"></div>
-                    <p id="groupSchool"></p>
-                    <p id="groupLeader"></p>
-                    <p id="groupTime"></p>
+                <div class="qr-info">
+                    <div class="qr-id" id="groupId"></div>
+                    <div class="qr-details">
+                        <p id="groupSchool"></p>
+                        <p id="groupLeader"></p>
+                        <p id="groupTime"></p>
+                    </div>
                 </div>
             </div>
 
-            <p class="text-center" style="color: var(--text-muted); margin-bottom: 1rem;">
-                Ce QR code a été envoyé à la caisse. L'impression se fait à l'accueil.
-            </p>
-
-            <button class="btn btn-primary btn-block" id="newRegistration">
-                + Nouvel enregistrement
-            </button>
+            <div class="next-actions">
+                <button class="btn btn-primary btn-block" id="newRegistration">
+                    Nouvel enregistrement
+                </button>
+            </div>
         </section>
     </div>
 
@@ -291,18 +315,17 @@
                     });
                     
                     const preview = document.getElementById('cameraPreview');
+                    preview.innerHTML = '';
+                    
                     const video = document.createElement('video');
                     video.srcObject = this.stream;
                     video.autoplay = true;
                     video.playsInline = true;
-                    
-                    preview.innerHTML = '';
                     preview.appendChild(video);
                     
-                    document.getElementById('scannerOverlay').classList.remove('hidden');
                     document.getElementById('startCameraBtn').classList.add('hidden');
                     document.getElementById('captureBtn').classList.remove('hidden');
-                    document.getElementById('scannerContainer').classList.add('active');
+                    document.getElementById('manualBtn').classList.add('hidden');
                 } catch (err) {
                     app.showToast('Erreur caméra: ' + err.message, 'error');
                     this.showManualInput();
@@ -313,31 +336,25 @@
                 const video = document.querySelector('#cameraPreview video');
                 if (!video) return;
 
-                // Show loading
-                app.showToast('📸 Capture et analyse en cours...', 'success');
+                app.showToast('Capture et analyse...', 'success');
                 
-                // Disable capture button during processing
                 const captureBtn = document.getElementById('captureBtn');
                 captureBtn.disabled = true;
-                captureBtn.textContent = '⏳ Analyse...';
+                captureBtn.textContent = 'Analyse...';
 
                 try {
-                    // Create canvas with video dimensions
                     const canvas = document.createElement('canvas');
                     canvas.width = video.videoWidth || 1280;
                     canvas.height = video.videoHeight || 720;
                     const ctx = canvas.getContext('2d');
                     
-                    // Draw video frame
                     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
                     
-                    // Preprocess image for better OCR
                     const processedCanvas = this.preprocessImage(canvas);
                     
-                    // Configure Tesseract with optimized settings
                     const result = await Tesseract.recognize(processedCanvas, 'fra', {
                         tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-',
-                        tessedit_pageseg_mode: '7', // Treat as single text line
+                        tessedit_pageseg_mode: '7',
                         preserve_interword_spaces: '0',
                         user_defined_dpi: '300'
                     });
@@ -345,32 +362,29 @@
                     const rawText = result.data.text;
                     console.log('OCR Raw result:', rawText);
                     
-                    // Try multiple pattern matching strategies
                     const plate = this.extractPlateNumber(rawText);
                     
                     if (plate) {
                         this.plateNumber = plate;
                         document.getElementById('plateResult').textContent = this.plateNumber;
-                        document.getElementById('plateResult').classList.remove('hidden');
+                        document.getElementById('plateResultBox').classList.remove('hidden');
                         document.getElementById('confirmPlateBtn').classList.remove('hidden');
-                        app.showToast('✅ Plaque détectée: ' + this.plateNumber, 'success');
-                        
-                        // Stop camera
+                        app.showToast('Plaque détectée: ' + this.plateNumber, 'success');
                         this.stopCamera();
-                    } else {
-                        // Show raw result for debugging
-                        console.log('No plate pattern found in:', rawText);
-                        app.showToast('❌ Plaque non reconnue. Essayez avec plus de lumière ou saisissez manuellement.', 'error');
                         
-                        // Show preview of what was captured
+                        // Restore camera button for next time
+                        document.getElementById('manualBtn').classList.remove('hidden');
+                    } else {
+                        console.log('No plate pattern found in:', rawText);
+                        app.showToast('Plaque non reconnue. Essayez avec plus de lumière.', 'error');
                         this.showCapturePreview(processedCanvas);
                     }
                 } catch (err) {
                     console.error('OCR Error:', err);
-                    app.showToast('❌ Erreur OCR: ' + err.message, 'error');
+                    app.showToast('Erreur OCR: ' + err.message, 'error');
                 } finally {
                     captureBtn.disabled = false;
-                    captureBtn.textContent = '📸 Capturer';
+                    captureBtn.textContent = 'Capturer';
                 }
             },
 
@@ -525,9 +539,8 @@
                     this.stream.getTracks().forEach(track => track.stop());
                     this.stream = null;
                 }
-                document.getElementById('scannerOverlay').classList.add('hidden');
                 document.getElementById('captureBtn').classList.add('hidden');
-                document.getElementById('scannerContainer').classList.remove('active');
+                document.getElementById('startCameraBtn').classList.remove('hidden');
             },
 
             showManualInput() {
@@ -535,13 +548,24 @@
                 document.getElementById('manualInputGroup').classList.remove('hidden');
                 document.getElementById('confirmPlateBtn').classList.remove('hidden');
                 document.getElementById('startCameraBtn').classList.add('hidden');
-                document.getElementById('captureBtn').classList.add('hidden');
+                document.getElementById('manualBtn').classList.add('hidden');
             },
 
             goToStep(step) {
                 document.querySelectorAll('section').forEach(s => s.classList.add('hidden'));
                 document.getElementById(`step${step}`).classList.remove('hidden');
                 this.currentStep = step;
+                
+                // Update steps indicator
+                document.querySelectorAll('.step').forEach((el, index) => {
+                    el.classList.remove('active', 'completed');
+                    if (index + 1 === step) {
+                        el.classList.add('active');
+                    } else if (index + 1 < step) {
+                        el.classList.add('completed');
+                    }
+                });
+                
                 window.scrollTo(0, 0);
             },
 
@@ -553,7 +577,7 @@
                 const adults = document.getElementById('adultsCount').value;
 
                 if (!school || !city || !postal || !children || !adults) {
-                    app.showToast('Veuillez remplir tous les champs obligatoires', 'error');
+                    app.showToast('Veuillez remplir tous les champs', 'error');
                     return;
                 }
 
@@ -634,18 +658,18 @@
                 document.getElementById('groupId').textContent = groupId;
                 document.getElementById('groupSchool').textContent = data.schoolName;
                 document.getElementById('groupLeader').textContent = 
-                    `Responsable: ${data.leaderFirstName} ${data.leaderLastName}`;
+                    `${data.leaderFirstName} ${data.leaderLastName}`;
                 document.getElementById('groupTime').textContent = 
-                    `Arrivée: ${new Date(data.arrivalTime).toLocaleString('fr-FR')}`;
+                    new Date(data.arrivalTime).toLocaleString('fr-FR');
 
                 const qrContainer = document.getElementById('qrcode');
                 qrContainer.innerHTML = '';
                 
                 new QRCode(qrContainer, {
                     text: groupId,
-                    width: 200,
-                    height: 200,
-                    colorDark: '#1a1a2e',
+                    width: 180,
+                    height: 180,
+                    colorDark: '#000000',
                     colorLight: '#ffffff',
                     correctLevel: QRCode.CorrectLevel.H
                 });
@@ -656,12 +680,25 @@
                 document.querySelectorAll('input').forEach(input => input.value = '');
                 this.clearSignature();
                 this.plateNumber = '';
-                document.getElementById('plateResult').classList.add('hidden');
+                
+                // Reset step 1 UI
+                document.getElementById('plateResultBox').classList.add('hidden');
                 document.getElementById('confirmPlateBtn').classList.add('hidden');
                 document.getElementById('manualInputGroup').classList.add('hidden');
                 document.getElementById('startCameraBtn').classList.remove('hidden');
-                document.getElementById('cameraPreview').innerHTML = 
-                    '<p>Cliquez sur "Démarrer la caméra" pour scanner</p>';
+                document.getElementById('manualBtn').classList.remove('hidden');
+                
+                // Reset camera preview
+                const preview = document.getElementById('cameraPreview');
+                preview.innerHTML = `
+                    <div class="camera-placeholder">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+                            <rect x="3" y="7" width="18" height="12" rx="2"/>
+                            <circle cx="12" cy="13" r="3"/>
+                        </svg>
+                        <p>Appareil photo</p>
+                    </div>
+                `;
                 
                 this.goToStep(1);
             }
