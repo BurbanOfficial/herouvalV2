@@ -529,7 +529,11 @@
                             canvas.height = img.height;
                             const ctx = canvas.getContext('2d');
                             ctx.drawImage(img, 0, 0);
-                            resolve(canvas.toDataURL('image/png'));
+                            resolve({
+                                dataUrl: canvas.toDataURL('image/png'),
+                                width: img.width,
+                                height: img.height
+                            });
                         };
                         img.onerror = reject;
                         img.src = url;
@@ -538,10 +542,13 @@
 
                 try {
                     const logoUrl = 'assets/logo-herouval.png'; // URL relative
-                    const logoDataUrl = await loadImage(logoUrl);
-                    const logoWidth = 40;
-                    const logoHeight = 14;
-                    doc.addImage(logoDataUrl, 'PNG', (pageWidth - logoWidth) / 2, y, logoWidth, logoHeight);
+                    const logoData = await loadImage(logoUrl);
+                    const logoMaxWidth = 50; // Largeur max souhaitée
+                    // Calculer la hauteur en préservant le ratio
+                    const ratio = logoData.height / logoData.width;
+                    const logoWidth = logoMaxWidth;
+                    const logoHeight = logoMaxWidth * ratio;
+                    doc.addImage(logoData.dataUrl, 'PNG', (pageWidth - logoWidth) / 2, y, logoWidth, logoHeight);
                     y += logoHeight + 8;
                 } catch (err) {
                     // Fallback: texte si logo non disponible
