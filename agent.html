@@ -2,258 +2,450 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ParkBus • Agent</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
-    
-    <style>
-        :root { --primary: 59 130 246; }
-        body { font-family: 'Inter', system_ui, sans-serif; }
-        .logo-font { font-family: 'Space Grotesk', sans-serif; }
-        
-        .glass { background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(20px); }
-        
-        #camera-feed { height: 320px; }
-        .scan-frame {
-            position: absolute;
-            inset: 30px;
-            border: 3px solid rgba(59, 130, 246, 0.7);
-            border-radius: 16px;
-            box-shadow: 0 0 0 9999px rgba(15, 23, 42, 0.85);
-            animation: scanPulse 2.5s infinite;
-        }
-        @keyframes scanPulse { 0%,100% { opacity: 0.7; } 50% { opacity: 1; } }
-        
-        input, button { font-size: 1.1rem; }
-        .input-modern:focus {
-            box-shadow: 0 0 0 5px rgb(59 130 246 / 0.3);
-            transform: scale(1.03);
-        }
-    </style>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agent - Enregistrement Bus</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#1a1a2e">
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://unpkg.com/tesseract.js@4.1.1/dist/tesseract.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
 </head>
-<body class="bg-slate-950 text-slate-200 min-h-screen pb-8">
+<body>
+    <div class="container">
+        <header class="page-header">
+            <a href="index.html" class="back-link">← Retour</a>
+            <h1>🚌 Enregistrement d'un Bus</h1>
+            <div></div>
+        </header>
 
-    <nav class="glass border-b border-slate-700 sticky top-0 z-50">
-        <div class="max-w-xl mx-auto px-6 py-5 flex items-center justify-between">
-            <div class="flex items-center gap-x-3">
-                <i class="fa-solid fa-bus text-blue-500 text-3xl"></i>
-                <div class="logo-font text-2xl font-semibold tracking-tighter">ParkBus</div>
-            </div>
-            <div class="text-xs bg-emerald-500/10 text-emerald-400 px-4 py-2 rounded-3xl border border-emerald-500/30 font-mono">
-                TERMINAL AGENT
-            </div>
-        </div>
-    </nav>
-
-    <main class="max-w-xl mx-auto px-6 pt-8">
-        <div class="bg-slate-900 border border-slate-700 rounded-3xl p-6 shadow-2xl">
-            <h1 class="text-2xl font-semibold mb-2">Enregistrement Bus</h1>
-            <p class="text-slate-400 mb-8">Scan de plaque • Signature</p>
-
-            <!-- Camera -->
-            <div class="relative rounded-3xl overflow-hidden bg-black border border-slate-700 mb-8">
-                <video id="camera-feed" autoplay playsinline class="w-full object-cover"></video>
-                <div class="scan-frame"></div>
-                
-                <div class="absolute bottom-6 left-1/2 -translate-x-1/2">
-                    <button onclick="scanPlate()" id="btn-scan"
-                            class="flex items-center gap-x-3 bg-white text-slate-900 font-semibold px-8 py-4 rounded-2xl shadow-xl active:scale-95 transition-all">
-                        <i class="fa-solid fa-camera"></i>
-                        <span>Scanner la plaque</span>
-                    </button>
+        <!-- Étape 1: Scan Plaque -->
+        <section id="step1" class="form-container">
+            <h2 class="mb-2">Étape 1 : Plaque d'immatriculation</h2>
+            
+            <div class="scanner-container" id="scannerContainer">
+                <div class="camera-preview" id="cameraPreview">
+                    <p>Cliquez sur "Démarrer la caméra" pour scanner</p>
+                </div>
+                <div class="scanner-overlay hidden" id="scannerOverlay">
+                    <div class="scanner-line"></div>
                 </div>
             </div>
 
-            <form id="bus-form" class="space-y-7">
-                <div>
-                    <label class="text-xs uppercase tracking-widest text-slate-400 mb-2 block">Plaque</label>
-                    <input type="text" id="plaque" 
-                           class="input-modern w-full bg-slate-950 border border-slate-700 rounded-2xl px-6 py-5 text-2xl font-mono text-center uppercase"
-                           placeholder="AB-123-CD" required>
-                </div>
-
-                <div class="grid grid-cols-2 gap-5">
-                    <div>
-                        <label class="text-xs uppercase tracking-widest text-slate-400 mb-2 block">Couleur</label>
-                        <input type="text" id="couleur" class="input-modern w-full bg-slate-950 border border-slate-700 rounded-2xl px-6 py-4" placeholder="Bleu" required>
-                    </div>
-                    <div>
-                        <label class="text-xs uppercase tracking-widest text-slate-400 mb-2 block">École</label>
-                        <input type="text" id="ecole" class="input-modern w-full bg-slate-950 border border-slate-700 rounded-2xl px-6 py-4" placeholder="Établissement" required>
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-2 gap-5">
-                    <div>
-                        <label class="text-xs uppercase tracking-widest text-slate-400 mb-2 block">CP</label>
-                        <input type="text" id="cp" class="input-modern w-full bg-slate-950 border border-slate-700 rounded-2xl px-6 py-4" placeholder="75000" required>
-                    </div>
-                    <div>
-                        <label class="text-xs uppercase tracking-widest text-slate-400 mb-2 block">Ville</label>
-                        <input type="text" id="ville" class="input-modern w-full bg-slate-950 border border-slate-700 rounded-2xl px-6 py-4" placeholder="Paris" required>
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-2 gap-5">
-                    <div>
-                        <label class="text-xs uppercase tracking-widest text-slate-400 mb-2 block">Enfants</label>
-                        <input type="number" id="nb_enfants" value="0" class="input-modern w-full bg-slate-950 border border-slate-700 rounded-2xl px-6 py-4 text-center text-2xl" required>
-                    </div>
-                    <div>
-                        <label class="text-xs uppercase tracking-widest text-slate-400 mb-2 block">Adultes</label>
-                        <input type="number" id="nb_adultes" value="0" class="input-modern w-full bg-slate-950 border border-slate-700 rounded-2xl px-6 py-4 text-center text-2xl" required>
-                    </div>
-                </div>
-
-                <div>
-                    <label class="text-xs uppercase tracking-widest text-slate-400 mb-2 block">Responsable</label>
-                    <input type="text" id="responsable" class="input-modern w-full bg-slate-950 border border-slate-700 rounded-2xl px-6 py-4" placeholder="Nom du responsable" required>
-                </div>
-
-                <!-- Signature -->
-                <div>
-                    <label class="text-xs uppercase tracking-widest text-slate-400 mb-3 block">Signature</label>
-                    <div class="bg-white border-2 border-dashed border-slate-300 rounded-2xl p-3">
-                        <canvas id="signature-pad" class="w-full h-44 bg-white rounded-xl cursor-crosshair touch-manipulation"></canvas>
-                    </div>
-                    <button type="button" onclick="clearSignature()" class="mt-3 text-red-400 flex items-center gap-2 text-sm">
-                        <i class="fa-solid fa-eraser"></i> Effacer
-                    </button>
-                </div>
-
-                <button type="submit" id="btn-submit"
-                        class="w-full bg-gradient-to-r from-blue-600 to-indigo-600 py-6 rounded-3xl text-lg font-semibold shadow-xl active:scale-95 transition-all flex items-center justify-center gap-3">
-                    <i class="fa-solid fa-paper-plane"></i>
-                    VALIDER & ENVOYER
+            <div class="btn-group">
+                <button class="btn btn-primary" id="startCameraBtn">
+                    📷 Démarrer la caméra
                 </button>
-            </form>
-        </div>
-    </main>
+                <button class="btn btn-secondary hidden" id="captureBtn">
+                    📸 Capturer
+                </button>
+                <button class="btn btn-outline" id="manualBtn">
+                    ⌨️ Saisir manuellement
+                </button>
+            </div>
 
-    <script type="module">
-        // Firebase imports (à compléter avec tes clés)
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
-        import { getFirestore, collection, addDoc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
-        import { getStorage, ref, uploadString, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-storage.js";
+            <div class="scanner-result hidden" id="plateResult"></div>
 
-        const firebaseConfig = { /* TES CLÉS ICI */ };
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
-        const storage = getStorage(app);
+            <div class="form-group hidden" id="manualInputGroup">
+                <label for="manualPlate">Plaque d'immatriculation</label>
+                <input type="text" id="manualPlate" placeholder="AB-123-CD">
+            </div>
 
-        // Camera + OCR
-        let stream = null;
-        const video = document.getElementById('camera-feed');
+            <button class="btn btn-success btn-block hidden" id="confirmPlateBtn">
+                Confirmer et continuer →
+            </button>
+        </section>
 
-        async function startCamera() {
-            stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-            video.srcObject = stream;
-        }
-
-        window.scanPlate = async () => {
-            const btn = document.getElementById('btn-scan');
-            btn.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> Analyse...`;
+        <!-- Étape 2: Informations Groupe -->
+        <section id="step2" class="form-container hidden">
+            <h2 class="mb-2">Étape 2 : Informations du groupe</h2>
             
-            const canvas = document.createElement('canvas');
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            canvas.getContext('2d').drawImage(video, 0, 0);
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="schoolName">Nom de l'école/organisation *</label>
+                    <input type="text" id="schoolName" required>
+                </div>
+            </div>
 
-            try {
-                const { data: { text } } = await Tesseract.recognize(canvas, 'fra');
-                const match = text.match(/[A-Z]{2}[-.\s]?[0-9]{3}[-.\s]?[A-Z]{2}/i);
-                if (match) {
-                    document.getElementById('plaque').value = match[0].toUpperCase().replace(/[\s.]/g, '-');
-                    alert("✅ Plaque détectée !");
-                } else {
-                    alert("Aucune plaque détectée. Saisissez manuellement.");
-                }
-            } catch(e) { alert("Erreur OCR"); }
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="city">Ville *</label>
+                    <input type="text" id="city" required>
+                </div>
+                <div class="form-group">
+                    <label for="postalCode">Code postal *</label>
+                    <input type="text" id="postalCode" pattern="[0-9]{5}" maxlength="5" required>
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="childrenCount">Nombre d'enfants *</label>
+                    <input type="number" id="childrenCount" min="1" required>
+                </div>
+                <div class="form-group">
+                    <label for="adultsCount">Nombre d'accompagnateurs *</label>
+                    <input type="number" id="adultsCount" min="1" required>
+                </div>
+            </div>
+
+            <div class="btn-group">
+                <button class="btn btn-outline" id="backToStep1">← Retour</button>
+                <button class="btn btn-success" id="confirmStep2">
+                    Continuer →
+                </button>
+            </div>
+        </section>
+
+        <!-- Étape 3: Responsable et Signature -->
+        <section id="step3" class="form-container hidden">
+            <h2 class="mb-2">Étape 3 : Responsable de la sortie</h2>
             
-            btn.innerHTML = `<i class="fa-solid fa-camera"></i> Scanner la plaque`;
-        };
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="leaderLastName">Nom du responsable *</label>
+                    <input type="text" id="leaderLastName" required>
+                </div>
+                <div class="form-group">
+                    <label for="leaderFirstName">Prénom du responsable *</label>
+                    <input type="text" id="leaderFirstName" required>
+                </div>
+            </div>
 
-        // Signature
-        const canvasSig = document.getElementById('signature-pad');
-        const ctx = canvasSig.getContext('2d');
-        let isDrawing = false;
+            <div class="form-group">
+                <label>Signature du responsable *</label>
+                <div class="signature-container">
+                    <canvas id="signaturePad"></canvas>
+                </div>
+                <button class="btn btn-outline btn-sm" id="clearSignature" style="margin-top: 0.5rem;">
+                    Effacer la signature
+                </button>
+            </div>
 
-        function resizeCanvas() {
-            const ratio = window.devicePixelRatio || 1;
-            canvasSig.width = canvasSig.offsetWidth * ratio;
-            canvasSig.height = canvasSig.offsetHeight * ratio;
-            ctx.scale(ratio, ratio);
-            ctx.lineWidth = 3.5;
-            ctx.lineCap = 'round';
-            ctx.strokeStyle = '#1e2937';
-        }
+            <div class="btn-group">
+                <button class="btn btn-outline" id="backToStep2">← Retour</button>
+                <button class="btn btn-success" id="validateGroup">
+                    ✓ Valider le groupe
+                </button>
+            </div>
+        </section>
 
-        // Gestion du dessin (souris + tactile)
-        const draw = (e) => {
-            if (!isDrawing) return;
-            const rect = canvasSig.getBoundingClientRect();
-            const x = (e.clientX || e.touches[0].clientX) - rect.left;
-            const y = (e.clientY || e.touches[0].clientY) - rect.top;
-            ctx.lineTo(x, y);
-            ctx.stroke();
-            ctx.beginPath();
-            ctx.moveTo(x, y);
-        };
+        <!-- Étape 4: QR Code Généré -->
+        <section id="step4" class="form-container hidden">
+            <h2 class="text-center mb-2">Groupe Enregistré !</h2>
+            
+            <div class="qr-display">
+                <div id="qrcode"></div>
+                <div class="group-info">
+                    <div class="group-id" id="groupId"></div>
+                    <p id="groupSchool"></p>
+                    <p id="groupLeader"></p>
+                    <p id="groupTime"></p>
+                </div>
+            </div>
 
-        canvasSig.addEventListener('mousedown', () => isDrawing = true);
-        canvasSig.addEventListener('mouseup', () => { isDrawing = false; ctx.beginPath(); });
-        canvasSig.addEventListener('mousemove', draw);
-        canvasSig.addEventListener('touchstart', () => isDrawing = true);
-        canvasSig.addEventListener('touchend', () => { isDrawing = false; ctx.beginPath(); });
-        canvasSig.addEventListener('touchmove', draw);
+            <p class="text-center" style="color: var(--text-muted); margin-bottom: 1rem;">
+                Ce QR code a été envoyé à la caisse. L'impression se fait à l'accueil.
+            </p>
 
-        window.clearSignature = () => ctx.clearRect(0, 0, canvasSig.width, canvasSig.height);
+            <button class="btn btn-primary btn-block" id="newRegistration">
+                + Nouvel enregistrement
+            </button>
+        </section>
+    </div>
 
-        // Formulaire
-        document.getElementById('bus-form').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const btn = document.getElementById('btn-submit');
-            btn.disabled = true;
-            btn.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> Enregistrement...`;
+    <script src="app.js"></script>
+    <script>
+        // Agent-specific code
+        const agent = {
+            currentStep: 1,
+            plateNumber: '',
+            stream: null,
+            
+            init() {
+                this.setupEventListeners();
+                this.setupSignaturePad();
+            },
 
-            try {
-                const signatureDataUrl = canvasSig.toDataURL('image/png');
-                const signatureRef = ref(storage, `signatures/${Date.now()}.png`);
-                await uploadString(signatureRef, signatureDataUrl, 'data_url');
-                const signatureUrl = await getDownloadURL(signatureRef);
+            setupEventListeners() {
+                document.getElementById('startCameraBtn').addEventListener('click', () => this.startCamera());
+                document.getElementById('captureBtn').addEventListener('click', () => this.capturePlate());
+                document.getElementById('manualBtn').addEventListener('click', () => this.showManualInput());
+                document.getElementById('confirmPlateBtn').addEventListener('click', () => this.goToStep(2));
+                document.getElementById('backToStep1').addEventListener('click', () => this.goToStep(1));
+                document.getElementById('confirmStep2').addEventListener('click', () => this.confirmStep2());
+                document.getElementById('backToStep2').addEventListener('click', () => this.goToStep(2));
+                document.getElementById('validateGroup').addEventListener('click', () => this.validateGroup());
+                document.getElementById('clearSignature').addEventListener('click', () => this.clearSignature());
+                document.getElementById('newRegistration').addEventListener('click', () => this.reset());
 
-                await addDoc(collection(db, "buses"), {
-                    timestamp: new Date(),
-                    plaque: document.getElementById('plaque').value,
-                    couleur: document.getElementById('couleur').value,
-                    ecole: document.getElementById('ecole').value,
-                    cp: document.getElementById('cp').value,
-                    ville: document.getElementById('ville').value,
-                    nb_enfants: parseInt(document.getElementById('nb_enfants').value) || 0,
-                    nb_adultes: parseInt(document.getElementById('nb_adultes').value) || 0,
-                    responsable: document.getElementById('responsable').value,
-                    signature_url: signatureUrl
+                // Manual plate input
+                document.getElementById('manualPlate').addEventListener('input', (e) => {
+                    this.plateNumber = e.target.value.toUpperCase();
+                    document.getElementById('plateResult').textContent = this.plateNumber;
                 });
+            },
 
-                alert("✅ Bus enregistré avec succès !");
-                e.target.reset();
-                clearSignature();
-            } catch (err) {
-                alert("Erreur lors de l'enregistrement");
-                console.error(err);
-            } finally {
-                btn.disabled = false;
-                btn.innerHTML = `<i class="fa-solid fa-paper-plane"></i> VALIDER & ENVOYER`;
+            setupSignaturePad() {
+                const canvas = document.getElementById('signaturePad');
+                const ctx = canvas.getContext('2d');
+                let drawing = false;
+
+                // Set canvas size
+                canvas.width = canvas.offsetWidth;
+                canvas.height = canvas.offsetHeight;
+
+                ctx.strokeStyle = '#000';
+                ctx.lineWidth = 2;
+                ctx.lineCap = 'round';
+
+                const startDrawing = (e) => {
+                    drawing = true;
+                    const { x, y } = this.getCoordinates(e, canvas);
+                    ctx.beginPath();
+                    ctx.moveTo(x, y);
+                };
+
+                const draw = (e) => {
+                    if (!drawing) return;
+                    const { x, y } = this.getCoordinates(e, canvas);
+                    ctx.lineTo(x, y);
+                    ctx.stroke();
+                };
+
+                const stopDrawing = () => {
+                    drawing = false;
+                };
+
+                canvas.addEventListener('mousedown', startDrawing);
+                canvas.addEventListener('mousemove', draw);
+                canvas.addEventListener('mouseup', stopDrawing);
+                canvas.addEventListener('mouseout', stopDrawing);
+
+                canvas.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    startDrawing(e);
+                });
+                canvas.addEventListener('touchmove', (e) => {
+                    e.preventDefault();
+                    draw(e);
+                });
+                canvas.addEventListener('touchend', stopDrawing);
+            },
+
+            getCoordinates(e, canvas) {
+                const rect = canvas.getBoundingClientRect();
+                const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+                return {
+                    x: clientX - rect.left,
+                    y: clientY - rect.top
+                };
+            },
+
+            clearSignature() {
+                const canvas = document.getElementById('signaturePad');
+                const ctx = canvas.getContext('2d');
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+            },
+
+            async startCamera() {
+                try {
+                    this.stream = await navigator.mediaDevices.getUserMedia({ 
+                        video: { facingMode: 'environment' } 
+                    });
+                    
+                    const preview = document.getElementById('cameraPreview');
+                    const video = document.createElement('video');
+                    video.srcObject = this.stream;
+                    video.autoplay = true;
+                    video.playsInline = true;
+                    
+                    preview.innerHTML = '';
+                    preview.appendChild(video);
+                    
+                    document.getElementById('scannerOverlay').classList.remove('hidden');
+                    document.getElementById('startCameraBtn').classList.add('hidden');
+                    document.getElementById('captureBtn').classList.remove('hidden');
+                    document.getElementById('scannerContainer').classList.add('active');
+                } catch (err) {
+                    app.showToast('Erreur caméra: ' + err.message, 'error');
+                    this.showManualInput();
+                }
+            },
+
+            async capturePlate() {
+                const video = document.querySelector('#cameraPreview video');
+                if (!video) return;
+
+                const canvas = document.createElement('canvas');
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(video, 0, 0);
+
+                // Show loading
+                app.showToast('Analyse de la plaque en cours...', 'success');
+
+                try {
+                    const result = await Tesseract.recognize(canvas, 'fra', {
+                        tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-'
+                    });
+
+                    const text = result.data.text.toUpperCase().replace(/[^A-Z0-9-]/g, '');
+                    
+                    // French plate format validation (simplified)
+                    const plateMatch = text.match(/[A-Z]{2}[-]?[0-9]{3}[-]?[A-Z]{2}/);
+                    
+                    if (plateMatch) {
+                        this.plateNumber = plateMatch[0];
+                        document.getElementById('plateResult').textContent = this.plateNumber;
+                        document.getElementById('plateResult').classList.remove('hidden');
+                        document.getElementById('confirmPlateBtn').classList.remove('hidden');
+                        app.showToast('Plaque détectée: ' + this.plateNumber, 'success');
+                        
+                        // Stop camera
+                        this.stopCamera();
+                    } else {
+                        app.showToast('Plaque non reconnue, veuillez réessayer ou saisir manuellement', 'error');
+                    }
+                } catch (err) {
+                    app.showToast('Erreur OCR: ' + err.message, 'error');
+                }
+            },
+
+            stopCamera() {
+                if (this.stream) {
+                    this.stream.getTracks().forEach(track => track.stop());
+                    this.stream = null;
+                }
+                document.getElementById('scannerOverlay').classList.add('hidden');
+                document.getElementById('captureBtn').classList.add('hidden');
+                document.getElementById('scannerContainer').classList.remove('active');
+            },
+
+            showManualInput() {
+                this.stopCamera();
+                document.getElementById('manualInputGroup').classList.remove('hidden');
+                document.getElementById('confirmPlateBtn').classList.remove('hidden');
+                document.getElementById('startCameraBtn').classList.add('hidden');
+                document.getElementById('captureBtn').classList.add('hidden');
+            },
+
+            goToStep(step) {
+                document.querySelectorAll('section').forEach(s => s.classList.add('hidden'));
+                document.getElementById(`step${step}`).classList.remove('hidden');
+                this.currentStep = step;
+                window.scrollTo(0, 0);
+            },
+
+            confirmStep2() {
+                const school = document.getElementById('schoolName').value;
+                const city = document.getElementById('city').value;
+                const postal = document.getElementById('postalCode').value;
+                const children = document.getElementById('childrenCount').value;
+                const adults = document.getElementById('adultsCount').value;
+
+                if (!school || !city || !postal || !children || !adults) {
+                    app.showToast('Veuillez remplir tous les champs obligatoires', 'error');
+                    return;
+                }
+
+                this.goToStep(3);
+            },
+
+            async validateGroup() {
+                const leaderLastName = document.getElementById('leaderLastName').value;
+                const leaderFirstName = document.getElementById('leaderFirstName').value;
+                
+                if (!leaderLastName || !leaderFirstName) {
+                    app.showToast('Veuillez indiquer le nom et prénom du responsable', 'error');
+                    return;
+                }
+
+                // Check signature
+                const canvas = document.getElementById('signaturePad');
+                const ctx = canvas.getContext('2d');
+                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                const hasSignature = imageData.data.some(channel => channel !== 0);
+
+                if (!hasSignature) {
+                    app.showToast('La signature est obligatoire', 'error');
+                    return;
+                }
+
+                // Generate group data
+                const now = new Date();
+                const groupData = {
+                    plateNumber: this.plateNumber,
+                    schoolName: document.getElementById('schoolName').value,
+                    city: document.getElementById('city').value,
+                    postalCode: document.getElementById('postalCode').value,
+                    childrenCount: parseInt(document.getElementById('childrenCount').value),
+                    adultsCount: parseInt(document.getElementById('adultsCount').value),
+                    leaderLastName,
+                    leaderFirstName,
+                    arrivalTime: now.toISOString(),
+                    activities: {},
+                    status: 'registered'
+                };
+
+                try {
+                    // Save to Firestore
+                    const groupId = await app.saveGroup(groupData);
+                    
+                    // Display QR code
+                    this.displayQRCode(groupId, groupData);
+                    this.goToStep(4);
+                    
+                    app.showToast('Groupe enregistré avec succès!', 'success');
+                } catch (err) {
+                    app.showToast('Erreur lors de l\'enregistrement: ' + err.message, 'error');
+                }
+            },
+
+            displayQRCode(groupId, data) {
+                document.getElementById('groupId').textContent = groupId;
+                document.getElementById('groupSchool').textContent = data.schoolName;
+                document.getElementById('groupLeader').textContent = 
+                    `Responsable: ${data.leaderFirstName} ${data.leaderLastName}`;
+                document.getElementById('groupTime').textContent = 
+                    `Arrivée: ${new Date(data.arrivalTime).toLocaleString('fr-FR')}`;
+
+                const qrContainer = document.getElementById('qrcode');
+                qrContainer.innerHTML = '';
+                
+                new QRCode(qrContainer, {
+                    text: groupId,
+                    width: 200,
+                    height: 200,
+                    colorDark: '#1a1a2e',
+                    colorLight: '#ffffff',
+                    correctLevel: QRCode.CorrectLevel.H
+                });
+            },
+
+            reset() {
+                // Reset all fields
+                document.querySelectorAll('input').forEach(input => input.value = '');
+                this.clearSignature();
+                this.plateNumber = '';
+                document.getElementById('plateResult').classList.add('hidden');
+                document.getElementById('confirmPlateBtn').classList.add('hidden');
+                document.getElementById('manualInputGroup').classList.add('hidden');
+                document.getElementById('startCameraBtn').classList.remove('hidden');
+                document.getElementById('cameraPreview').innerHTML = 
+                    '<p>Cliquez sur "Démarrer la caméra" pour scanner</p>';
+                
+                this.goToStep(1);
             }
-        });
+        };
 
-        // Init
-        startCamera();
-        setTimeout(resizeCanvas, 300);
-        window.addEventListener('resize', resizeCanvas);
+        // Initialize when DOM is ready
+        document.addEventListener('DOMContentLoaded', () => {
+            agent.init();
+        });
     </script>
 </body>
 </html>

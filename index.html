@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hérouval Control - Gestion des Groupes</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#1a1a2e">
+    <link rel="apple-touch-icon" href="icon-192x192.png">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header class="main-header">
+            <h1>Hérouval Control</h1>
+            <p class="subtitle">Gestion des Groupes Scolaires</p>
+        </header>
+
+        <main class="menu-grid">
+            <a href="agent.html" class="menu-card">
+                <div class="card-icon">🚌</div>
+                <h2>Agent de Contrôle</h2>
+                <p>Enregistrer l'arrivée des bus</p>
+            </a>
+
+            <a href="caisse.html" class="menu-card">
+                <div class="card-icon">💰</div>
+                <h2>Caisse</h2>
+                <p>Gérer les paiements et activités</p>
+            </a>
+
+            <a href="operateurs.html" class="menu-card">
+                <div class="card-icon">🎢</div>
+                <h2>Opérateurs</h2>
+                <p>Scanner les groupes aux attractions</p>
+            </a>
+
+            <a href="bureaux.html" class="menu-card">
+                <div class="card-icon">📊</div>
+                <h2>Bureaux</h2>
+                <p>Suivi en temps réel</p>
+            </a>
+        </main>
+
+        <footer class="main-footer">
+            <p>&copy; 2024 Hérouval Control</p>
+        </footer>
+    </div>
+
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('sw.js');
+        }
+    </script>
+</body>
+</html>

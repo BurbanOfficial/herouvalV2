@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Opérateurs - Scan QR</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#1a1a2e">
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header class="page-header">
+            <a href="index.html" class="back-link">← Retour</a>
+            <h1>🎢 Opérateurs</h1>
+            <div></div>
+        </header>
+
+        <!-- Sélection de l'attraction -->
+        <section id="attractionSelect" class="form-container">
+            <h2 class="mb-2">Sélectionnez votre attraction</h2>
+            
+            <div class="form-group">
+                <label for="operatorAttraction">Votre poste</label>
+                <select id="operatorAttraction" class="form-control">
+                    <option value="">-- Choisir une attraction --</option>
+                    <option value="karting">Karting</option>
+                    <option value="laser_game">Laser Game</option>
+                    <option value="escape_game">Escape Game</option>
+                    <option value="vr_experience">VR Expérience</option>
+                    <option value="tyrolienne">Tyrolienne</option>
+                    <option value="climbing">Escalade</option>
+                </select>
+            </div>
+
+            <button class="btn btn-primary btn-block" id="confirmAttraction">
+                Confirmer et ouvrir le scanner
+            </button>
+        </section>
+
+        <!-- Scanner QR -->
+        <section id="scannerSection" class="form-container hidden">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                <h2>Scanner un groupe</h2>
+                <button class="btn btn-outline" id="changeAttraction">
+                    Changer d'attraction
+                </button>
+            </div>
+
+            <div class="scanner-container" id="qrScanner">
+                <div id="reader" style="width: 100%; max-width: 600px; margin: 0 auto;"></div>
+            </div>
+
+            <div class="scanner-result hidden" id="scanResult">
+                <p>Groupe scanné: <strong id="scannedGroupId"></strong></p>
+            </div>
+        </section>
+
+        <!-- Résultat de validation -->
+        <section id="validationResult" class="hidden">
+            <div class="operator-status" id="statusContainer">
+                <div class="status-icon" id="statusIcon">⏳</div>
+                <div class="status-text" id="statusText">
+                    En attente du scan...
+                </div>
+            </div>
+
+            <div class="group-validation-info hidden" id="groupInfo">
+                <h3 style="margin-bottom: 1.5rem; color: var(--highlight);">Informations du groupe</h3>
+                
+                <div class="validation-row">
+                    <span>Groupe:</span>
+                    <strong id="valGroupId"></strong>
+                </div>
+                <div class="validation-row">
+                    <span>École:</span>
+                    <strong id="valSchool"></strong>
+                </div>
+                <div class="validation-row">
+                    <span>Responsable:</span>
+                    <strong id="valLeader"></strong>
+                </div>
+                <div class="validation-row">
+                    <span>Total personnes:</span>
+                    <strong id="valTotal"></strong>
+                </div>
+
+                <div style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border);">
+                    <div class="validation-row">
+                        <span>Attraction:</span>
+                        <strong id="valAttraction"></strong>
+                    </div>
+                    <div class="validation-row">
+                        <span>Places autorisées:</span>
+                        <strong id="valAllowed" style="color: var(--success); font-size: 1.2rem;"></strong>
+                    </div>
+                    <div class="validation-row">
+                        <span>Places déjà utilisées:</span>
+                        <strong id="valUsed"></strong>
+                    </div>
+                    <div class="validation-row">
+                        <span>Places restantes:</span>
+                        <strong id="valRemaining" style="color: var(--highlight); font-size: 1.3rem;"></strong>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-container hidden" id="activitiesContainer">
+                <h3 class="mb-2">Activités disponibles pour ce groupe</h3>
+                <div id="activitiesList" class="activities-grid">
+                    <!-- Dynamically populated -->
+                </div>
+            </div>
+
+            <div class="btn-group" id="actionButtons" style="display: none;">
+                <button class="btn btn-primary btn-block" id="validateEntry">
+                    ✓ Valider l'entrée
+                </button>
+            </div>
+
+            <button class="btn btn-secondary btn-block mt-2" id="scanNext" style="display: none;">
+                📷 Scanner un autre groupe
+            </button>
+        </section>
+    </div>
+
+    <script src="app.js"></script>
+    <script>
+        const operateur = {
+            selectedAttraction: '',
+            selectedAttractionName: '',
+            currentGroup: null,
+            html5QrCode: null,
+            activities: {
+                karting: 'Karting',
+                laser_game: 'Laser Game',
+                escape_game: 'Escape Game',
+                vr_experience: 'VR Expérience',
+                tyrolienne: 'Tyrolienne',
+                climbing: 'Escalade'
+            },
+
+            init() {
+                this.setupEventListeners();
+            },
+
+            setupEventListeners() {
+                document.getElementById('confirmAttraction').addEventListener('click', () => {
+                    this.confirmAttraction();
+                });
+
+                document.getElementById('changeAttraction').addEventListener('click', () => {
+                    this.resetAttraction();
+                });
+
+                document.getElementById('validateEntry').addEventListener('click', () => {
+                    this.validateEntry();
+                });
+
+                document.getElementById('scanNext').addEventListener('click', () => {
+                    this.resetScan();
+                });
+            },
+
+            confirmAttraction() {
+                const select = document.getElementById('operatorAttraction');
+                this.selectedAttraction = select.value;
+                this.selectedAttractionName = select.options[select.selectedIndex].text;
+
+                if (!this.selectedAttraction) {
+                    app.showToast('Veuillez sélectionner une attraction', 'error');
+                    return;
+                }
+
+                document.getElementById('attractionSelect').classList.add('hidden');
+                document.getElementById('scannerSection').classList.remove('hidden');
+                document.getElementById('validationResult').classList.remove('hidden');
+
+                this.startScanner();
+            },
+
+            startScanner() {
+                const reader = document.getElementById('reader');
+                reader.innerHTML = '';
+
+                this.html5QrCode = new Html5Qrcode('reader');
+                
+                const config = { 
+                    fps: 10, 
+                    qrbox: { width: 250, height: 250 } 
+                };
+
+                this.html5QrCode.start(
+                    { facingMode: 'environment' },
+                    config,
+                    (decodedText) => {
+                        this.onScanSuccess(decodedText);
+                    },
+                    (error) => {
+                        // Ignore scan errors (no QR in frame)
+                    }
+                ).catch(err => {
+                    app.showToast('Erreur caméra: ' + err.message, 'error');
+                });
+            },
+
+            stopScanner() {
+                if (this.html5QrCode) {
+                    this.html5QrCode.stop().then(() => {
+                        this.html5QrCode = null;
+                    }).catch(() => {});
+                }
+            },
+
+            async onScanSuccess(groupId) {
+                // Stop scanning temporarily
+                this.stopScanner();
+
+                document.getElementById('scannedGroupId').textContent = groupId;
+                document.getElementById('scanResult').classList.remove('hidden');
+
+                try {
+                    const group = await app.getGroup(groupId);
+                    
+                    if (!group) {
+                        this.showStatus('Groupe non trouvé', 'denied');
+                        return;
+                    }
+
+                    this.currentGroup = group;
+                    this.validateGroupAccess(group);
+
+                } catch (err) {
+                    app.showToast('Erreur: ' + err.message, 'error');
+                    this.resetScan();
+                }
+            },
+
+            validateGroupAccess(group) {
+                const activity = group.activities && group.activities[this.selectedAttraction];
+                
+                // Fill group info
+                document.getElementById('valGroupId').textContent = group.id;
+                document.getElementById('valSchool').textContent = group.schoolName;
+                document.getElementById('valLeader').textContent = 
+                    `${group.leaderFirstName} ${group.leaderLastName}`;
+                document.getElementById('valTotal').textContent = 
+                    group.childrenCount + group.adultsCount;
+                document.getElementById('valAttraction').textContent = this.selectedAttractionName;
+
+                document.getElementById('groupInfo').classList.remove('hidden');
+
+                if (!activity) {
+                    // No activity booked
+                    document.getElementById('valAllowed').textContent = '0';
+                    document.getElementById('valUsed').textContent = '0';
+                    document.getElementById('valRemaining').textContent = '0';
+                    
+                    this.showStatus('ACCÈS REFUSÉ - Activité non payée', 'denied');
+                    this.showActivitiesList(group);
+                    
+                    document.getElementById('actionButtons').style.display = 'none';
+                    document.getElementById('scanNext').style.display = 'block';
+                    return;
+                }
+
+                const totalAllowed = activity.quantity;
+                const used = activity.completed || 0;
+                const remaining = totalAllowed - used;
+
+                document.getElementById('valAllowed').textContent = totalAllowed;
+                document.getElementById('valUsed').textContent = used;
+                document.getElementById('valRemaining').textContent = remaining;
+
+                if (remaining > 0) {
+                    this.showStatus(`ACCÈS AUTORISÉ - ${remaining} places`, 'allowed');
+                    document.getElementById('actionButtons').style.display = 'flex';
+                } else {
+                    this.showStatus('ACCÈS REFUSÉ - Quota épuisé', 'denied');
+                    document.getElementById('actionButtons').style.display = 'none';
+                }
+
+                this.showActivitiesList(group);
+                document.getElementById('scanNext').style.display = 'block';
+            },
+
+            showStatus(message, type) {
+                const container = document.getElementById('statusContainer');
+                const icon = document.getElementById('statusIcon');
+                const text = document.getElementById('statusText');
+
+                text.textContent = message;
+                text.className = 'status-text ' + type;
+
+                if (type === 'allowed') {
+                    icon.textContent = '✅';
+                    container.style.border = '2px solid var(--success)';
+                } else {
+                    icon.textContent = '❌';
+                    container.style.border = '2px solid var(--highlight)';
+                }
+            },
+
+            showActivitiesList(group) {
+                const container = document.getElementById('activitiesList');
+                container.innerHTML = '';
+
+                const activitiesContainer = document.getElementById('activitiesContainer');
+                
+                if (!group.activities || Object.keys(group.activities).length === 0) {
+                    activitiesContainer.classList.add('hidden');
+                    return;
+                }
+
+                activitiesContainer.classList.remove('hidden');
+
+                Object.entries(group.activities).forEach(([id, activity]) => {
+                    const card = document.createElement('div');
+                    const isCompleted = activity.completed >= activity.quantity;
+                    const isCurrent = id === this.selectedAttraction;
+                    
+                    card.className = `activity-card ${isCompleted ? 'completed' : ''}`;
+                    if (isCurrent) {
+                        card.style.border = '2px solid var(--success)';
+                    }
+
+                    card.innerHTML = `
+                        <div class="activity-header">
+                            <span class="activity-title">${activity.name}</span>
+                            <span class="activity-status ${isCompleted ? 'valid' : ''}"></span>
+                        </div>
+                        <p style="color: var(--text-muted); font-size: 0.9rem;">
+                            ${activity.completed || 0} / ${activity.quantity} utilisés
+                        </p>
+                    `;
+
+                    container.appendChild(card);
+                });
+            },
+
+            async validateEntry() {
+                if (!this.currentGroup) return;
+
+                try {
+                    const activity = this.currentGroup.activities[this.selectedAttraction];
+                    const newCompleted = (activity.completed || 0) + 1;
+
+                    // Update the activity count
+                    const updatedActivities = { ...this.currentGroup.activities };
+                    updatedActivities[this.selectedAttraction] = {
+                        ...activity,
+                        completed: newCompleted
+                    };
+
+                    await app.updateGroup(this.currentGroup.id, {
+                        activities: updatedActivities
+                    });
+
+                    app.showToast('Entrée validée!', 'success');
+                    
+                    // Refresh display
+                    this.currentGroup.activities = updatedActivities;
+                    this.validateGroupAccess(this.currentGroup);
+
+                } catch (err) {
+                    app.showToast('Erreur: ' + err.message, 'error');
+                }
+            },
+
+            resetScan() {
+                document.getElementById('scanResult').classList.add('hidden');
+                document.getElementById('groupInfo').classList.add('hidden');
+                document.getElementById('activitiesContainer').classList.add('hidden');
+                document.getElementById('actionButtons').style.display = 'none';
+                document.getElementById('scanNext').style.display = 'none';
+                
+                this.showStatus('En attente du scan...', '');
+                document.getElementById('statusContainer').style.border = 'none';
+                
+                this.startScanner();
+            },
+
+            resetAttraction() {
+                this.stopScanner();
+                this.selectedAttraction = '';
+                this.currentGroup = null;
+                
+                document.getElementById('attractionSelect').classList.remove('hidden');
+                document.getElementById('scannerSection').classList.add('hidden');
+                document.getElementById('validationResult').classList.add('hidden');
+                
+                this.resetScan();
+            }
+        };
+
+        document.addEventListener('DOMContentLoaded', () => {
+            operateur.init();
+        });
+    </script>
+</body>
+</html>

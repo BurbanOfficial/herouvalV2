@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Générateur d'Icônes</title>
+    <style>
+        body {
+            font-family: system-ui, sans-serif;
+            background: #0f0f1a;
+            color: white;
+            padding: 2rem;
+        }
+        .icon-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 2rem;
+        }
+        .icon-item {
+            text-align: center;
+        }
+        canvas {
+            border-radius: 20%;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+        }
+        .size-label {
+            margin-top: 0.5rem;
+            color: #a0a0a0;
+        }
+        button {
+            margin-top: 2rem;
+            padding: 1rem 2rem;
+            background: #e94560;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <h1>Générateur d'Icônes Hérouval Control</h1>
+    <p>Cliquez sur chaque icône pour la télécharger</p>
+    
+    <div class="icon-grid" id="iconGrid"></div>
+    
+    <button onclick="downloadAll()">Télécharger toutes les icônes</button>
+
+    <script>
+        const sizes = [72, 96, 128, 144, 152, 192, 384, 512];
+        
+        function drawIcon(canvas, size) {
+            const ctx = canvas.getContext('2d');
+            
+            // Background gradient
+            const gradient = ctx.createLinearGradient(0, 0, size, size);
+            gradient.addColorStop(0, '#1a1a2e');
+            gradient.addColorStop(1, '#0f3460');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, size, size);
+            
+            // Border radius effect (draw rounded rect)
+            ctx.fillStyle = gradient;
+            
+            // Bus icon
+            ctx.fillStyle = '#e94560';
+            const centerX = size / 2;
+            const centerY = size / 2;
+            const scale = size / 512;
+            
+            // Bus body
+            ctx.fillRect(centerX - 100 * scale, centerY - 60 * scale, 200 * scale, 120 * scale);
+            
+            // Bus top
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(centerX - 80 * scale, centerY - 50 * scale, 160 * scale, 50 * scale);
+            
+            // Wheels
+            ctx.fillStyle = '#16213e';
+            ctx.beginPath();
+            ctx.arc(centerX - 60 * scale, centerY + 50 * scale, 25 * scale, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.beginPath();
+            ctx.arc(centerX + 60 * scale, centerY + 50 * scale, 25 * scale, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // H letter
+            ctx.fillStyle = '#ffffff';
+            ctx.font = `bold ${150 * scale}px sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('H', centerX, centerY + 10 * scale);
+        }
+        
+        function createIcons() {
+            const grid = document.getElementById('iconGrid');
+            
+            sizes.forEach(size => {
+                const item = document.createElement('div');
+                item.className = 'icon-item';
+                
+                const canvas = document.createElement('canvas');
+                canvas.width = size;
+                canvas.height = size;
+                canvas.id = `icon-${size}`;
+                
+                drawIcon(canvas, size);
+                
+                const label = document.createElement('div');
+                label.className = 'size-label';
+                label.textContent = `${size}x${size}`;
+                
+                item.appendChild(canvas);
+                item.appendChild(label);
+                grid.appendChild(item);
+                
+                // Click to download single icon
+                canvas.style.cursor = 'pointer';
+                canvas.onclick = () => downloadIcon(canvas, size);
+            });
+        }
+        
+        function downloadIcon(canvas, size) {
+            const link = document.createElement('a');
+            link.download = `icon-${size}x${size}.png`;
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        }
+        
+        function downloadAll() {
+            sizes.forEach((size, index) => {
+                setTimeout(() => {
+                    const canvas = document.getElementById(`icon-${size}`);
+                    downloadIcon(canvas, size);
+                }, index * 200);
+            });
+        }
+        
+        createIcons();
+    </script>
+</body>
+</html>

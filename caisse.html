@@ -3,111 +3,399 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ParkBus • Caisse</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
-    
-    <style>
-        body { font-family: 'Inter', system_ui, sans-serif; }
-        .logo-font { font-family: 'Space Grotesk', sans-serif; }
-    </style>
+    <title>Caisse - Gestion des Groupes</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#1a1a2e">
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
 </head>
-<body class="bg-slate-950 text-slate-200 min-h-screen">
+<body>
+    <div class="container">
+        <header class="page-header">
+            <a href="index.html" class="back-link">← Retour</a>
+            <h1>💰 Caisse</h1>
+            <div></div>
+        </header>
 
-    <nav class="bg-slate-900 border-b border-slate-700 sticky top-0 z-50">
-        <div class="max-w-7xl mx-auto px-8 py-6 flex items-center justify-between">
-            <div class="flex items-center gap-x-4">
-                <i class="fa-solid fa-bus text-4xl text-blue-500"></i>
+        <!-- Liste des groupes -->
+        <section class="form-container">
+            <h2 class="mb-2">Groupes en attente</h2>
+            <div id="groupsList" class="groups-list">
+                <div class="spinner"></div>
+            </div>
+        </section>
+
+        <!-- Détails du groupe sélectionné -->
+        <section id="groupDetails" class="form-container hidden">
+            <div class="group-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
                 <div>
-                    <span class="logo-font text-3xl font-semibold tracking-tighter">ParkBus</span>
-                    <span class="block text-xs text-slate-500 -mt-1">MONITEUR CAISSE</span>
+                    <h2 id="selectedGroupId" style="font-size: 1.5rem; margin-bottom: 0.5rem;"></h2>
+                    <p id="selectedGroupInfo" style="color: var(--text-muted);"></p>
                 </div>
+                <div class="group-qr" id="selectedQRCode"></div>
             </div>
-        </div>
-    </nav>
 
-    <main class="max-w-7xl mx-auto px-8 py-10">
-        <div class="bg-slate-900 border border-slate-700 rounded-3xl p-8">
-            <div class="flex justify-between items-center mb-10">
-                <h1 class="text-3xl font-semibold">Flux d'arrivées en temps réel</h1>
+            <div class="validation-row">
+                <span>École:</span>
+                <strong id="detailSchool"></strong>
+            </div>
+            <div class="validation-row">
+                <span>Ville:</span>
+                <strong id="detailCity"></strong>
+            </div>
+            <div class="validation-row">
+                <span>Responsable:</span>
+                <strong id="detailLeader"></strong>
+            </div>
+            <div class="validation-row">
+                <span>Enfants:</span>
+                <strong id="detailChildren"></strong>
+            </div>
+            <div class="validation-row">
+                <span>Accompagnateurs:</span>
+                <strong id="detailAdults"></strong>
+            </div>
+            <div class="validation-row">
+                <span>Total:</span>
+                <strong id="detailTotal"></strong>
+            </div>
+            <div class="validation-row">
+                <span>Arrivée:</span>
+                <strong id="detailArrival"></strong>
+            </div>
+        </section>
+
+        <!-- Activités -->
+        <section id="activitiesSection" class="form-container hidden">
+            <h2 class="mb-2">Activités payantes</h2>
+            <p style="color: var(--text-muted); margin-bottom: 1rem;">
+                Sélectionnez les quantités ou cochez "Groupe complet"
+            </p>
+
+            <div class="activities-grid" id="activitiesGrid">
+                <!-- Dynamically populated -->
+            </div>
+
+            <div class="btn-group">
+                <button class="btn btn-outline" id="deselectGroup">Annuler</button>
+                <button class="btn btn-success" id="validatePayment">
+                    ✓ Valider et imprimer le QR code
+                </button>
+            </div>
+        </section>
+    </div>
+
+    <!-- Hidden container for PDF generation -->
+    <div id="pdfContainer" style="position: fixed; left: -9999px; top: 0;">
+        <div id="pdfQRCode"></div>
+    </div>
+
+    <script src="app.js"></script>
+    <script>
+        const caisse = {
+            selectedGroup: null,
+            activities: [
+                { id: 'karting', name: 'Karting', price: 8 },
+                { id: 'laser_game', name: 'Laser Game', price: 10 },
+                { id: 'escape_game', name: 'Escape Game', price: 12 },
+                { id: 'vr_experience', name: 'VR Expérience', price: 6 },
+                { id: 'tyrolienne', name: 'Tyrolienne', price: 7 },
+                { id: 'climbing', name: 'Escalade', price: 5 }
+            ],
+
+            init() {
+                this.setupActivities();
+                this.setupEventListeners();
+                this.loadGroups();
                 
-                <div class="relative w-96">
-                    <input type="text" id="search-bar" 
-                           class="w-full bg-slate-950 border border-slate-700 rounded-3xl py-5 pl-12 text-lg"
-                           placeholder="Rechercher par école ou plaque...">
-                    <i class="fa-solid fa-magnifying-glass absolute left-5 top-1/2 -translate-y-1/2 text-slate-400"></i>
-                </div>
-            </div>
+                // Real-time updates
+                app.listenToGroups((groups) => {
+                    this.renderGroups(groups);
+                });
+            },
 
-            <div class="overflow-x-auto rounded-3xl border border-slate-700">
-                <table class="w-full" id="buses-table">
-                    <thead>
-                        <tr class="border-b border-slate-700 text-xs uppercase tracking-widest text-slate-400">
-                            <th class="py-6 px-8 text-left">Heure</th>
-                            <th class="py-6 px-8 text-left">Plaque</th>
-                            <th class="py-6 px-8 text-left">Établissement</th>
-                            <th class="py-6 px-8 text-left">Provenance</th>
-                            <th class="py-6 px-8 text-center">Élèves</th>
-                            <th class="py-6 px-8 text-center">Adultes</th>
-                            <th class="py-6 px-8 text-center">Signature</th>
-                        </tr>
-                    </thead>
-                    <tbody id="buses-list" class="text-sm"></tbody>
-                </table>
-            </div>
-        </div>
-    </main>
+            setupActivities() {
+                const grid = document.getElementById('activitiesGrid');
+                grid.innerHTML = '';
 
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
-        import { getFirestore, collection, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+                this.activities.forEach(activity => {
+                    const card = document.createElement('div');
+                    card.className = 'activity-card';
+                    card.innerHTML = `
+                        <div class="activity-header">
+                            <span class="activity-title">${activity.name}</span>
+                            <span style="color: var(--text-muted);">${activity.price}€</span>
+                        </div>
+                        <div class="activity-controls">
+                            <input type="number" 
+                                   class="form-group activity-input" 
+                                   id="activity_${activity.id}" 
+                                   min="0" 
+                                   value="0"
+                                   data-activity="${activity.id}"
+                                   placeholder="Places">
+                        </div>
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="group_${activity.id}" data-activity="${activity.id}">
+                            <label for="group_${activity.id}">Groupe complet</label>
+                        </div>
+                    `;
+                    grid.appendChild(card);
+                });
+            },
 
-        const firebaseConfig = { /* TES CLÉS ICI */ };
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
+            setupEventListeners() {
+                document.getElementById('deselectGroup').addEventListener('click', () => {
+                    this.deselectGroup();
+                });
 
-        let allBuses = [];
+                document.getElementById('validatePayment').addEventListener('click', () => {
+                    this.validatePayment();
+                });
 
-        const q = query(collection(db, "buses"), orderBy("timestamp", "desc"));
+                // Checkbox handlers - when checked, set value to total group
+                document.querySelectorAll('[id^="group_"]').forEach(checkbox => {
+                    checkbox.addEventListener('change', (e) => {
+                        const activityId = e.target.dataset.activity;
+                        const input = document.getElementById(`activity_${activityId}`);
+                        
+                        if (e.target.checked && this.selectedGroup) {
+                            const total = this.selectedGroup.childrenCount + this.selectedGroup.adultsCount;
+                            input.value = total;
+                            input.disabled = true;
+                        } else {
+                            input.value = 0;
+                            input.disabled = false;
+                        }
+                    });
+                });
+            },
 
-        onSnapshot(q, (snapshot) => {
-            allBuses = [];
-            snapshot.forEach(doc => allBuses.push(doc.data()));
-            renderTable(allBuses);
-        });
+            loadGroups() {
+                // Initial load - realtime updates handle the rest
+            },
 
-        function renderTable(data) {
-            const tbody = document.getElementById('buses-list');
-            tbody.innerHTML = '';
+            renderGroups(groups) {
+                const container = document.getElementById('groupsList');
+                
+                if (groups.length === 0) {
+                    container.innerHTML = '<p class="text-center" style="color: var(--text-muted);">Aucun groupe en attente</p>';
+                    return;
+                }
 
-            data.forEach(bus => {
-                const date = bus.timestamp.toDate ? bus.timestamp.toDate() : new Date(bus.timestamp);
-                const time = date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+                // Sort by arrival time (oldest first)
+                groups.sort((a, b) => new Date(a.arrivalTime) - new Date(b.arrivalTime));
 
-                const tr = document.createElement('tr');
-                tr.className = "border-b border-slate-700 hover:bg-slate-800 transition-colors";
-                tr.innerHTML = `
-                    <td class="py-6 px-8 font-mono">${time}</td>
-                    <td class="py-6 px-8"><span class="bg-slate-800 px-4 py-2 rounded-2xl font-mono">${bus.plaque}</span></td>
-                    <td class="py-6 px-8 font-medium">${bus.ecole}</td>
-                    <td class="py-6 px-8 text-slate-400">${bus.ville} (${bus.cp})</td>
-                    <td class="py-6 px-8 text-center"><span class="bg-emerald-500/10 text-emerald-400 px-4 py-2 rounded-2xl">${bus.nb_enfants}</span></td>
-                    <td class="py-6 px-8 text-center"><span class="bg-amber-500/10 text-amber-400 px-4 py-2 rounded-2xl">${bus.nb_adultes}</span></td>
-                    <td class="py-6 px-8 text-center">
-                        <img src="${bus.signature_url}" class="h-12 mx-auto rounded-xl border border-slate-600" alt="">
-                    </td>
-                `;
-                tbody.appendChild(tr);
-            });
-        }
+                container.innerHTML = '';
+                
+                groups.forEach(group => {
+                    const card = document.createElement('div');
+                    card.className = 'group-card';
+                    if (this.selectedGroup && this.selectedGroup.id === group.id) {
+                        card.classList.add('selected');
+                    }
+                    
+                    const total = group.childrenCount + group.adultsCount;
+                    const arrivalTime = new Date(group.arrivalTime).toLocaleTimeString('fr-FR', {
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    });
 
-        document.getElementById('search-bar').addEventListener('input', (e) => {
-            const term = e.target.value.toLowerCase();
-            const filtered = allBuses.filter(b => 
-                b.ecole.toLowerCase().includes(term) || b.plaque.toLowerCase().includes(term)
-            );
-            renderTable(filtered);
+                    card.innerHTML = `
+                        <div class="group-qr">
+                            <canvas id="qr_${group.id}"></canvas>
+                        </div>
+                        <div class="group-details">
+                            <h3>${group.schoolName}</h3>
+                            <p>${group.city} (${group.postalCode})</p>
+                            <p style="margin-top: 0.5rem;">Responsable: ${group.leaderFirstName} ${group.leaderLastName}</p>
+                        </div>
+                        <div class="group-meta">
+                            <div class="group-time">${arrivalTime}</div>
+                            <div class="group-counts">
+                                <span class="count-badge">${group.childrenCount} enfants</span>
+                                <span class="count-badge">${group.adultsCount} adultes</span>
+                            </div>
+                        </div>
+                    `;
+
+                    card.addEventListener('click', () => this.selectGroup(group));
+                    container.appendChild(card);
+
+                    // Generate mini QR code
+                    setTimeout(() => {
+                        const qrCanvas = document.getElementById(`qr_${group.id}`);
+                        if (qrCanvas) {
+                            new QRCode(qrCanvas, {
+                                text: group.id,
+                                width: 80,
+                                height: 80,
+                                colorDark: '#1a1a2e',
+                                colorLight: '#ffffff',
+                                correctLevel: QRCode.CorrectLevel.M
+                            });
+                        }
+                    }, 0);
+                });
+            },
+
+            selectGroup(group) {
+                this.selectedGroup = group;
+                
+                // Update UI
+                document.getElementById('groupDetails').classList.remove('hidden');
+                document.getElementById('activitiesSection').classList.remove('hidden');
+
+                // Fill details
+                document.getElementById('selectedGroupId').textContent = group.id;
+                document.getElementById('selectedGroupInfo').textContent = 
+                    `Plaque: ${group.plateNumber || 'Non spécifiée'}`;
+                document.getElementById('detailSchool').textContent = group.schoolName;
+                document.getElementById('detailCity').textContent = `${group.city} (${group.postalCode})`;
+                document.getElementById('detailLeader').textContent = 
+                    `${group.leaderFirstName} ${group.leaderLastName}`;
+                document.getElementById('detailChildren').textContent = group.childrenCount;
+                document.getElementById('detailAdults').textContent = group.adultsCount;
+                document.getElementById('detailTotal').textContent = 
+                    group.childrenCount + group.adultsCount;
+                document.getElementById('detailArrival').textContent = 
+                    new Date(group.arrivalTime).toLocaleString('fr-FR');
+
+                // Generate QR code
+                const qrContainer = document.getElementById('selectedQRCode');
+                qrContainer.innerHTML = '';
+                new QRCode(qrContainer, {
+                    text: group.id,
+                    width: 80,
+                    height: 80,
+                    colorDark: '#1a1a2e',
+                    colorLight: '#ffffff',
+                    correctLevel: QRCode.CorrectLevel.H
+                });
+
+                // Reset activity inputs
+                document.querySelectorAll('.activity-input').forEach(input => {
+                    input.value = 0;
+                    input.disabled = false;
+                });
+                document.querySelectorAll('[type="checkbox"]').forEach(cb => cb.checked = false);
+
+                // Re-render list to show selection
+                this.renderGroups(app.groups || []);
+                
+                window.scrollTo(0, document.getElementById('groupDetails').offsetTop - 20);
+            },
+
+            deselectGroup() {
+                this.selectedGroup = null;
+                document.getElementById('groupDetails').classList.add('hidden');
+                document.getElementById('activitiesSection').classList.add('hidden');
+                this.renderGroups(app.groups || []);
+            },
+
+            async validatePayment() {
+                if (!this.selectedGroup) return;
+
+                // Collect activities
+                const activities = {};
+                this.activities.forEach(activity => {
+                    const quantity = parseInt(document.getElementById(`activity_${activity.id}`).value) || 0;
+                    if (quantity > 0) {
+                        activities[activity.id] = {
+                            name: activity.name,
+                            quantity: quantity,
+                            price: activity.price,
+                            completed: 0
+                        };
+                    }
+                });
+
+                try {
+                    await app.updateGroup(this.selectedGroup.id, {
+                        activities: activities,
+                        status: 'paid',
+                        paymentTime: new Date().toISOString()
+                    });
+
+                    // Generate and print PDF
+                    this.generatePDF(this.selectedGroup, activities);
+
+                    app.showToast('Paiement validé et QR code généré', 'success');
+                    this.deselectGroup();
+                } catch (err) {
+                    app.showToast('Erreur: ' + err.message, 'error');
+                }
+            },
+
+            generatePDF(group, activities) {
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF();
+
+                // Header
+                doc.setFontSize(20);
+                doc.text('Hérouval Control - Ticket Groupe', 105, 20, { align: 'center' });
+
+                // Group info
+                doc.setFontSize(12);
+                let y = 40;
+                
+                doc.text(`Groupe: ${group.id}`, 20, y);
+                y += 10;
+                doc.text(`École: ${group.schoolName}`, 20, y);
+                y += 10;
+                doc.text(`Ville: ${group.city} (${group.postalCode})`, 20, y);
+                y += 10;
+                doc.text(`Responsable: ${group.leaderFirstName} ${group.leaderLastName}`, 20, y);
+                y += 10;
+                doc.text(`Enfants: ${group.childrenCount} | Accompagnateurs: ${group.adultsCount}`, 20, y);
+                y += 15;
+
+                // Activities
+                if (Object.keys(activities).length > 0) {
+                    doc.setFontSize(14);
+                    doc.text('Activités:', 20, y);
+                    y += 10;
+                    
+                    doc.setFontSize(12);
+                    Object.values(activities).forEach(act => {
+                        doc.text(`- ${act.name}: ${act.quantity} places`, 25, y);
+                        y += 8;
+                    });
+                    y += 10;
+                }
+
+                // QR Code - generate on canvas first
+                const qrCanvas = document.createElement('canvas');
+                new QRCode(qrCanvas, {
+                    text: group.id,
+                    width: 150,
+                    height: 150,
+                    colorDark: '#000000',
+                    colorLight: '#ffffff',
+                    correctLevel: QRCode.CorrectLevel.H
+                });
+
+                setTimeout(() => {
+                    const qrDataUrl = qrCanvas.toDataURL('image/png');
+                    doc.addImage(qrDataUrl, 'PNG', 75, y, 60, 60);
+                    
+                    // Footer
+                    doc.setFontSize(10);
+                    doc.text(`Arrivée: ${new Date(group.arrivalTime).toLocaleString('fr-FR')}`, 
+                             105, y + 75, { align: 'center' });
+
+                    // Print
+                    doc.autoPrint({ variant: 'non-conform' });
+                    doc.output('dataurlnewwindow');
+                }, 100);
+            }
+        };
+
+        document.addEventListener('DOMContentLoaded', () => {
+            caisse.init();
         });
     </script>
 </body>

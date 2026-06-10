@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bureaux - Tableau de Bord</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#1a1a2e">
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header class="page-header">
+            <a href="index.html" class="back-link">← Retour</a>
+            <h1>📊 Tableau de Bord</h1>
+            <div></div>
+        </header>
+
+        <!-- Statistiques en temps réel -->
+        <section class="dashboard-grid">
+            <div class="dashboard-card">
+                <h3>Groupes Enregistrés</h3>
+                <div class="stat-value" id="statRegistered">0</div>
+            </div>
+            <div class="dashboard-card">
+                <h3>Groupes Payés</h3>
+                <div class="stat-value" id="statPaid">0</div>
+            </div>
+            <div class="dashboard-card">
+                <h3>Total Visiteurs</h3>
+                <div class="stat-value" id="statVisitors">0</div>
+            </div>
+            <div class="dashboard-card">
+                <h3>Enfants Présents</h3>
+                <div class="stat-value" id="statChildren">0</div>
+            </div>
+        </section>
+
+        <!-- Filtres -->
+        <section class="form-container">
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Filtrer par statut</label>
+                    <select id="filterStatus" class="form-control">
+                        <option value="all">Tous</option>
+                        <option value="registered">Enregistrés</option>
+                        <option value="paid">Payés</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Rechercher</label>
+                    <input type="text" id="searchQuery" placeholder="Nom d'école, ville...">
+                </div>
+            </div>
+        </section>
+
+        <!-- Liste complète -->
+        <section class="form-container">
+            <h2 class="mb-2">Liste des Groupes</h2>
+            <div id="groupsList" class="groups-list">
+                <div class="spinner"></div>
+            </div>
+        </section>
+
+        <!-- Détails popup -->
+        <section id="detailsModal" class="form-container hidden" style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); max-width: 600px; width: 90%; max-height: 80vh; overflow-y: auto; z-index: 1000; box-shadow: 0 20px 60px rgba(0,0,0,0.5);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                <h2 id="modalTitle">Détails du groupe</h2>
+                <button class="btn btn-outline" id="closeModal" style="padding: 0.5rem 1rem;">✕</button>
+            </div>
+            
+            <div id="modalContent">
+                <!-- Dynamically filled -->
+            </div>
+        </section>
+
+        <!-- Overlay -->
+        <div id="modalOverlay" class="hidden" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 999;"></div>
+    </div>
+
+    <script src="app.js"></script>
+    <script>
+        const bureaux = {
+            groups: [],
+            filter: 'all',
+            search: '',
+
+            init() {
+                this.setupEventListeners();
+                this.loadGroups();
+                
+                // Real-time updates
+                app.listenToGroups((groups) => {
+                    this.groups = groups;
+                    this.updateStats();
+                    this.renderGroups();
+                });
+
+                // Update every 30 seconds as backup
+                setInterval(() => this.loadGroups(), 30000);
+            },
+
+            setupEventListeners() {
+                document.getElementById('filterStatus').addEventListener('change', (e) => {
+                    this.filter = e.target.value;
+                    this.renderGroups();
+                });
+
+                document.getElementById('searchQuery').addEventListener('input', (e) => {
+                    this.search = e.target.value.toLowerCase();
+                    this.renderGroups();
+                });
+
+                document.getElementById('closeModal').addEventListener('click', () => {
+                    this.closeModal();
+                });
+
+                document.getElementById('modalOverlay').addEventListener('click', () => {
+                    this.closeModal();
+                });
+            },
+
+            async loadGroups() {
+                try {
+                    this.groups = await app.getAllGroups();
+                    this.updateStats();
+                    this.renderGroups();
+                } catch (err) {
+                    console.error('Error loading groups:', err);
+                }
+            },
+
+            updateStats() {
+                const registered = this.groups.length;
+                const paid = this.groups.filter(g => g.status === 'paid').length;
+                const totalVisitors = this.groups.reduce((sum, g) => 
+                    sum + g.childrenCount + g.adultsCount, 0);
+                const totalChildren = this.groups.reduce((sum, g) => 
+                    sum + g.childrenCount, 0);
+
+                document.getElementById('statRegistered').textContent = registered;
+                document.getElementById('statPaid').textContent = paid;
+                document.getElementById('statVisitors').textContent = totalVisitors;
+                document.getElementById('statChildren').textContent = totalChildren;
+            },
+
+            renderGroups() {
+                const container = document.getElementById('groupsList');
+                
+                let filtered = this.groups;
+
+                // Apply status filter
+                if (this.filter !== 'all') {
+                    filtered = filtered.filter(g => g.status === this.filter);
+                }
+
+                // Apply search
+                if (this.search) {
+                    filtered = filtered.filter(g => 
+                        g.schoolName.toLowerCase().includes(this.search) ||
+                        g.city.toLowerCase().includes(this.search) ||
+                        g.leaderLastName.toLowerCase().includes(this.search) ||
+                        g.id.toLowerCase().includes(this.search)
+                    );
+                }
+
+                // Sort by arrival time (newest first for dashboard view)
+                filtered.sort((a, b) => new Date(b.arrivalTime) - new Date(a.arrivalTime));
+
+                if (filtered.length === 0) {
+                    container.innerHTML = '<p class="text-center" style="color: var(--text-muted);">Aucun groupe trouvé</p>';
+                    return;
+                }
+
+                container.innerHTML = '';
+                
+                filtered.forEach(group => {
+                    const card = document.createElement('div');
+                    card.className = 'group-card';
+                    
+                    const total = group.childrenCount + group.adultsCount;
+                    const arrivalTime = new Date(group.arrivalTime).toLocaleString('fr-FR');
+                    const statusColor = group.status === 'paid' ? 'var(--success)' : 'var(--warning)';
+                    const statusText = group.status === 'paid' ? 'Payé' : 'Enregistré';
+
+                    card.innerHTML = `
+                        <div class="group-qr">
+                            <canvas id="qr_${group.id}"></canvas>
+                        </div>
+                        <div class="group-details">
+                            <h3>${group.schoolName}</h3>
+                            <p>${group.city} (${group.postalCode})</p>
+                            <p style="margin-top: 0.5rem;">
+                                Responsable: ${group.leaderFirstName} ${group.leaderLastName}
+                            </p>
+                            <p style="color: ${statusColor}; font-size: 0.85rem; margin-top: 0.5rem;">
+                                ● ${statusText}
+                            </p>
+                        </div>
+                        <div class="group-meta">
+                            <div class="group-time">${arrivalTime}</div>
+                            <div class="group-counts">
+                                <span class="count-badge">${group.childrenCount} enfants</span>
+                                <span class="count-badge">${group.adultsCount} adultes</span>
+                            </div>
+                        </div>
+                    `;
+
+                    card.addEventListener('click', () => this.showDetails(group));
+                    card.style.cursor = 'pointer';
+                    container.appendChild(card);
+
+                    // Generate mini QR code
+                    setTimeout(() => {
+                        const qrCanvas = document.getElementById(`qr_${group.id}`);
+                        if (qrCanvas) {
+                            new QRCode(qrCanvas, {
+                                text: group.id,
+                                width: 80,
+                                height: 80,
+                                colorDark: '#1a1a2e',
+                                colorLight: '#ffffff',
+                                correctLevel: QRCode.CorrectLevel.M
+                            });
+                        }
+                    }, 0);
+                });
+            },
+
+            showDetails(group) {
+                const modal = document.getElementById('detailsModal');
+                const overlay = document.getElementById('modalOverlay');
+                const content = document.getElementById('modalContent');
+
+                document.getElementById('modalTitle').textContent = group.id;
+
+                // Build activities list
+                let activitiesHtml = '';
+                if (group.activities && Object.keys(group.activities).length > 0) {
+                    activitiesHtml = '<h3 style="margin: 1.5rem 0 1rem; color: var(--text-muted); font-size: 1rem; text-transform: uppercase; letter-spacing: 1px;">Activités</h3>';
+                    
+                    Object.values(group.activities).forEach(activity => {
+                        const remaining = activity.quantity - (activity.completed || 0);
+                        const statusColor = remaining === 0 ? 'var(--success)' : 
+                                          (activity.completed > 0 ? 'var(--warning)' : 'var(--text-muted)');
+                        
+                        activitiesHtml += `
+                            <div class="validation-row">
+                                <span>${activity.name}</span>
+                                <strong style="color: ${statusColor};">
+                                    ${activity.completed || 0}/${activity.quantity} (${remaining} restantes)
+                                </strong>
+                            </div>
+                        `;
+                    });
+                } else {
+                    activitiesHtml = '<p style="color: var(--text-muted); margin-top: 1rem;">Aucune activité payante</p>';
+                }
+
+                content.innerHTML = `
+                    <div class="validation-row">
+                        <span>Plaque:</span>
+                        <strong>${group.plateNumber || 'Non spécifiée'}</strong>
+                    </div>
+                    <div class="validation-row">
+                        <span>École:</span>
+                        <strong>${group.schoolName}</strong>
+                    </div>
+                    <div class="validation-row">
+                        <span>Ville:</span>
+                        <strong>${group.city} (${group.postalCode})</strong>
+                    </div>
+                    <div class="validation-row">
+                        <span>Responsable:</span>
+                        <strong>${group.leaderFirstName} ${group.leaderLastName}</strong>
+                    </div>
+                    <div class="validation-row">
+                        <span>Enfants:</span>
+                        <strong>${group.childrenCount}</strong>
+                    </div>
+                    <div class="validation-row">
+                        <span>Accompagnateurs:</span>
+                        <strong>${group.adultsCount}</strong>
+                    </div>
+                    <div class="validation-row">
+                        <span>Total:</span>
+                        <strong>${group.childrenCount + group.adultsCount}</strong>
+                    </div>
+                    <div class="validation-row">
+                        <span>Arrivée:</span>
+                        <strong>${new Date(group.arrivalTime).toLocaleString('fr-FR')}</strong>
+                    </div>
+                    <div class="validation-row">
+                        <span>Statut:</span>
+                        <strong style="color: ${group.status === 'paid' ? 'var(--success)' : 'var(--warning)'}">
+                            ${group.status === 'paid' ? 'Payé' : 'Enregistré'}
+                        </strong>
+                    </div>
+                    ${group.paymentTime ? `
+                    <div class="validation-row">
+                        <span>Paiement:</span>
+                        <strong>${new Date(group.paymentTime).toLocaleString('fr-FR')}</strong>
+                    </div>
+                    ` : ''}
+                    ${activitiesHtml}
+                    <div style="text-align: center; margin-top: 2rem; padding-top: 2rem; border-top: 1px solid var(--border);">
+                        <div id="modalQRCode" style="display: inline-block; background: white; padding: 1rem; border-radius: 8px;"></div>
+                    </div>
+                `;
+
+                modal.classList.remove('hidden');
+                overlay.classList.remove('hidden');
+
+                // Generate QR code in modal
+                setTimeout(() => {
+                    const qrContainer = document.getElementById('modalQRCode');
+                    qrContainer.innerHTML = '';
+                    new QRCode(qrContainer, {
+                        text: group.id,
+                        width: 150,
+                        height: 150,
+                        colorDark: '#1a1a2e',
+                        colorLight: '#ffffff',
+                        correctLevel: QRCode.CorrectLevel.H
+                    });
+                }, 0);
+            },
+
+            closeModal() {
+                document.getElementById('detailsModal').classList.add('hidden');
+                document.getElementById('modalOverlay').classList.add('hidden');
+            }
+        };
+
+        document.addEventListener('DOMContentLoaded', () => {
+            bureaux.init();
+        });
+    </script>
+</body>
+</html>
