@@ -1,0 +1,40 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Collection groups - données des groupes scolaires
+    match /groups/{groupId} {
+      // Autoriser la lecture pour tous (agents, caisse, opérateurs, bureaux)
+      allow read: if true;
+      
+      // Autoriser la création (agent de contrôle)
+      allow create: if true;
+      
+      // Autoriser la mise à jour (caisse pour paiement, opérateurs pour activités)
+      allow update: if true;
+      
+      // Interdire la suppression
+      allow delete: if false;
+    }
+    
+    // Collection settings - paramètres système
+    match /settings/{settingId} {
+      allow read: if true;
+      allow write: if false;
+    }
+    
+    // Collection stats - statistiques agrégées
+    match /stats/{statId} {
+      allow read: if true;
+      allow write: if false;
+    }
+    
+    // Collection logs - journaux d'activité (optionnel)
+    match /logs/{logId} {
+      allow read: if true;
+      allow create: if true;
+      allow update: if false;
+      allow delete: if false;
+    }
+  }
+}

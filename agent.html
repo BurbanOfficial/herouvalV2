@@ -279,40 +279,196 @@
                 const video = document.querySelector('#cameraPreview video');
                 if (!video) return;
 
-                const canvas = document.createElement('canvas');
-                canvas.width = video.videoWidth;
-                canvas.height = video.videoHeight;
-                const ctx = canvas.getContext('2d');
-                ctx.drawImage(video, 0, 0);
-
                 // Show loading
-                app.showToast('Analyse de la plaque en cours...', 'success');
+                app.showToast('📸 Capture et analyse en cours...', 'success');
+                
+                // Disable capture button during processing
+                const captureBtn = document.getElementById('captureBtn');
+                captureBtn.disabled = true;
+                captureBtn.textContent = '⏳ Analyse...';
 
                 try {
-                    const result = await Tesseract.recognize(canvas, 'fra', {
-                        tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-'
+                    // Create canvas with video dimensions
+                    const canvas = document.createElement('canvas');
+                    canvas.width = video.videoWidth || 1280;
+                    canvas.height = video.videoHeight || 720;
+                    const ctx = canvas.getContext('2d');
+                    
+                    // Draw video frame
+                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                    
+                    // Preprocess image for better OCR
+                    const processedCanvas = this.preprocessImage(canvas);
+                    
+                    // Configure Tesseract with optimized settings
+                    const result = await Tesseract.recognize(processedCanvas, 'fra', {
+                        tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-',
+                        tessedit_pageseg_mode: '7', // Treat as single text line
+                        preserve_interword_spaces: '0',
+                        user_defined_dpi: '300'
                     });
 
-                    const text = result.data.text.toUpperCase().replace(/[^A-Z0-9-]/g, '');
+                    const rawText = result.data.text;
+                    console.log('OCR Raw result:', rawText);
                     
-                    // French plate format validation (simplified)
-                    const plateMatch = text.match(/[A-Z]{2}[-]?[0-9]{3}[-]?[A-Z]{2}/);
+                    // Try multiple pattern matching strategies
+                    const plate = this.extractPlateNumber(rawText);
                     
-                    if (plateMatch) {
-                        this.plateNumber = plateMatch[0];
+                    if (plate) {
+                        this.plateNumber = plate;
                         document.getElementById('plateResult').textContent = this.plateNumber;
                         document.getElementById('plateResult').classList.remove('hidden');
                         document.getElementById('confirmPlateBtn').classList.remove('hidden');
-                        app.showToast('Plaque détectée: ' + this.plateNumber, 'success');
+                        app.showToast('✅ Plaque détectée: ' + this.plateNumber, 'success');
                         
                         // Stop camera
                         this.stopCamera();
                     } else {
-                        app.showToast('Plaque non reconnue, veuillez réessayer ou saisir manuellement', 'error');
+                        // Show raw result for debugging
+                        console.log('No plate pattern found in:', rawText);
+                        app.showToast('❌ Plaque non reconnue. Essayez avec plus de lumière ou saisissez manuellement.', 'error');
+                        
+                        // Show preview of what was captured
+                        this.showCapturePreview(processedCanvas);
                     }
                 } catch (err) {
-                    app.showToast('Erreur OCR: ' + err.message, 'error');
+                    console.error('OCR Error:', err);
+                    app.showToast('❌ Erreur OCR: ' + err.message, 'error');
+                } finally {
+                    captureBtn.disabled = false;
+                    captureBtn.textContent = '📸 Capturer';
                 }
+            },
+
+            preprocessImage(sourceCanvas) {
+                const canvas = document.createElement('canvas');
+                const size = Math.min(sourceCanvas.width, sourceCanvas.height, 1920);
+                canvas.width = size;
+                canvas.height = size * 0.4; // Plaque format is wide
+                
+                const ctx = canvas.getContext('2d');
+                
+                // Fill white background
+                ctx.fillStyle = 'white';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                // Center crop - plaque is usually in the middle horizontally
+                const sx = sourceCanvas.width * 0.1;
+                const sy = sourceCanvas.height * 0.3;
+                const sWidth = sourceCanvas.width * 0.8;
+                const sHeight = sourceCanvas.height * 0.4;
+                
+                ctx.drawImage(sourceCanvas, sx, sy, sWidth, sHeight, 0, 0, canvas.width, canvas.height);
+                
+                // Get image data for processing
+                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                const data = imageData.data;
+                
+                // Convert to grayscale and increase contrast
+                for (let i = 0; i < data.length; i += 4) {
+                    // Grayscale
+                    const gray = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
+                    
+                    // Increase contrast (threshold-like)
+                    const contrast = gray > 100 ? 255 : 0;
+                    
+                    data[i] = contrast;     // R
+                    data[i + 1] = contrast; // G
+                    data[i + 2] = contrast; // B
+                }
+                
+                ctx.putImageData(imageData, 0, 0);
+                
+                return canvas;
+            },
+
+            extractPlateNumber(text) {
+                if (!text) return null;
+                
+                // Clean text - keep only alphanumeric and common separators
+                const cleaned = text.toUpperCase()
+                    .replace(/[^A-Z0-9\s\-_.]/g, '')
+                    .replace(/[\s_.]+/g, '-');
+                
+                console.log('Cleaned text:', cleaned);
+                
+                // Multiple pattern attempts (French plates SIV format: AB-123-CD)
+                const patterns = [
+                    // Standard format: AB-123-CD
+                    /([A-Z]{2})[-\s]?([0-9]{3})[-\s]?([A-Z]{2})/,
+                    // Without separators: AB123CD
+                    /([A-Z]{2})([0-9]{3})([A-Z]{2})/,
+                    // Old format: 123-ABC-45
+                    /([0-9]{3})[-\s]?([A-Z]{3})[-\s]?([0-9]{2})/,
+                    // FNI format: ABC-123-DE
+                    /([A-Z]{3})[-\s]?([0-9]{3})[-\s]?([A-Z]{2})/,
+                    // Any 7+ alphanumeric that looks like a plate
+                    /([A-Z0-9]{2,3}[-\s]?[0-9]{2,3}[-\s]?[A-Z]{2,3})/
+                ];
+                
+                for (const pattern of patterns) {
+                    const match = cleaned.match(pattern);
+                    if (match) {
+                        // Format as standard XX-XXX-XX
+                        if (match[1] && match[2] && match[3]) {
+                            return `${match[1]}-${match[2]}-${match[3]}`;
+                        }
+                        // If single capture group
+                        if (match[1] && match[0] === match[1]) {
+                            const formatted = this.formatPlate(match[1]);
+                            if (formatted) return formatted;
+                        }
+                    }
+                }
+                
+                // Last resort: look for any sequence that could be a plate
+                const sequences = cleaned.split(/[-\s]+/).filter(s => s.length >= 2);
+                for (let i = 0; i < sequences.length - 2; i++) {
+                    const possiblePlate = `${sequences[i]}-${sequences[i+1]}-${sequences[i+2]}`;
+                    if (/[A-Z]{2}-[0-9]{3}-[A-Z]{2}/.test(possiblePlate)) {
+                        return possiblePlate;
+                    }
+                }
+                
+                return null;
+            },
+
+            formatPlate(text) {
+                // Try to format any text as a plate
+                const cleaned = text.replace(/[^A-Z0-9]/g, '');
+                
+                if (cleaned.length === 7) {
+                    // Likely XX123XX format
+                    return `${cleaned.slice(0,2)}-${cleaned.slice(2,5)}-${cleaned.slice(5,7)}`;
+                }
+                
+                if (cleaned.length === 9) {
+                    // Old format XXX123XX
+                    return `${cleaned.slice(0,3)}-${cleaned.slice(3,6)}-${cleaned.slice(6,9)}`;
+                }
+                
+                return null;
+            },
+
+            showCapturePreview(canvas) {
+                // Show a preview of what was captured for debugging
+                const preview = document.getElementById('cameraPreview');
+                preview.innerHTML = '';
+                
+                const container = document.createElement('div');
+                container.style.cssText = 'text-align: center; padding: 1rem;';
+                
+                const img = document.createElement('img');
+                img.src = canvas.toDataURL('image/jpeg');
+                img.style.cssText = 'max-width: 100%; border-radius: 8px; margin-bottom: 1rem;';
+                
+                const msg = document.createElement('p');
+                msg.textContent = 'Image capturée. Vous pouvez saisir la plaque manuellement.';
+                msg.style.color = 'var(--text-muted)';
+                
+                container.appendChild(img);
+                container.appendChild(msg);
+                preview.appendChild(container);
             },
 
             stopCamera() {
