@@ -189,49 +189,82 @@
 
             setupSignaturePad() {
                 const canvas = document.getElementById('signaturePad');
+                if (!canvas) return;
+                
                 const ctx = canvas.getContext('2d');
                 let drawing = false;
 
-                // Set canvas size
-                canvas.width = canvas.offsetWidth;
-                canvas.height = canvas.offsetHeight;
+                // Set fixed canvas size (CSS width will scale it visually)
+                const width = 600;
+                const height = 200;
+                canvas.width = width;
+                canvas.height = height;
+                
+                // Store actual size for coordinate calculation
+                canvas.dataset.width = width;
+                canvas.dataset.height = height;
 
                 ctx.strokeStyle = '#000';
-                ctx.lineWidth = 2;
+                ctx.lineWidth = 3;
                 ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+
+                const getPoint = (e) => {
+                    const rect = canvas.getBoundingClientRect();
+                    const scaleX = canvas.width / rect.width;
+                    const scaleY = canvas.height / rect.height;
+                    
+                    let clientX, clientY;
+                    if (e.touches && e.touches.length > 0) {
+                        clientX = e.touches[0].clientX;
+                        clientY = e.touches[0].clientY;
+                    } else if (e.changedTouches && e.changedTouches.length > 0) {
+                        clientX = e.changedTouches[0].clientX;
+                        clientY = e.changedTouches[0].clientY;
+                    } else {
+                        clientX = e.clientX;
+                        clientY = e.clientY;
+                    }
+                    
+                    return {
+                        x: (clientX - rect.left) * scaleX,
+                        y: (clientY - rect.top) * scaleY
+                    };
+                };
 
                 const startDrawing = (e) => {
+                    e.preventDefault();
                     drawing = true;
-                    const { x, y } = this.getCoordinates(e, canvas);
+                    const point = getPoint(e);
                     ctx.beginPath();
-                    ctx.moveTo(x, y);
+                    ctx.moveTo(point.x, point.y);
                 };
 
                 const draw = (e) => {
+                    e.preventDefault();
                     if (!drawing) return;
-                    const { x, y } = this.getCoordinates(e, canvas);
-                    ctx.lineTo(x, y);
+                    const point = getPoint(e);
+                    ctx.lineTo(point.x, point.y);
                     ctx.stroke();
                 };
 
-                const stopDrawing = () => {
+                const stopDrawing = (e) => {
+                    if (!drawing) return;
                     drawing = false;
+                    ctx.closePath();
                 };
 
+                // Mouse events
                 canvas.addEventListener('mousedown', startDrawing);
                 canvas.addEventListener('mousemove', draw);
                 canvas.addEventListener('mouseup', stopDrawing);
-                canvas.addEventListener('mouseout', stopDrawing);
+                canvas.addEventListener('mouseleave', stopDrawing);
 
-                canvas.addEventListener('touchstart', (e) => {
-                    e.preventDefault();
-                    startDrawing(e);
-                });
-                canvas.addEventListener('touchmove', (e) => {
-                    e.preventDefault();
-                    draw(e);
-                });
+                // Touch events
+                canvas.addEventListener('touchstart', startDrawing, { passive: false });
+                canvas.addEventListener('touchmove', draw, { passive: false });
                 canvas.addEventListener('touchend', stopDrawing);
+                canvas.addEventListener('touchcancel', stopDrawing);
             },
 
             getCoordinates(e, canvas) {
@@ -246,6 +279,7 @@
 
             clearSignature() {
                 const canvas = document.getElementById('signaturePad');
+                if (!canvas) return;
                 const ctx = canvas.getContext('2d');
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
             },
@@ -279,12 +313,6 @@
                 const video = document.querySelector('#cameraPreview video');
                 if (!video) return;
 
-                // Wait for video to be ready
-                if (video.readyState < 2 || !video.videoWidth || !video.videoHeight) {
-                    app.showToast('⏳ Caméra en cours d\'initialisation, réessayez...', 'error');
-                    return;
-                }
-
                 // Show loading
                 app.showToast('📸 Capture et analyse en cours...', 'success');
                 
@@ -294,31 +322,17 @@
                 captureBtn.textContent = '⏳ Analyse...';
 
                 try {
-                    // Small delay to ensure frame is stable
-                    await new Promise(r => setTimeout(r, 100));
-                    
-                    // Create canvas with actual video dimensions
-                    const width = video.videoWidth;
-                    const height = video.videoHeight;
-                    
-                    if (!width || !height) {
-                        throw new Error('Dimensions vidéo invalides');
-                    }
-                    
+                    // Create canvas with video dimensions
                     const canvas = document.createElement('canvas');
-                    canvas.width = width;
-                    canvas.height = height;
+                    canvas.width = video.videoWidth || 1280;
+                    canvas.height = video.videoHeight || 720;
                     const ctx = canvas.getContext('2d');
                     
                     // Draw video frame
-                    ctx.drawImage(video, 0, 0, width, height);
+                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
                     
                     // Preprocess image for better OCR
                     const processedCanvas = this.preprocessImage(canvas);
-                    
-                    if (!processedCanvas || processedCanvas.width === 0 || processedCanvas.height === 0) {
-                        throw new Error('Erreur lors du traitement de l\'image');
-                    }
                     
                     // Configure Tesseract with optimized settings
                     const result = await Tesseract.recognize(processedCanvas, 'fra', {
@@ -361,82 +375,43 @@
             },
 
             preprocessImage(sourceCanvas) {
-                // Validate dimensions
-                const sourceWidth = sourceCanvas.width;
-                const sourceHeight = sourceCanvas.height;
-                
-                if (!sourceWidth || !sourceHeight || sourceWidth === 0 || sourceHeight === 0) {
-                    console.error('Invalid source canvas dimensions:', sourceWidth, sourceHeight);
-                    return null;
-                }
-                
                 const canvas = document.createElement('canvas');
-                
-                // Target size - keep reasonable dimensions for OCR
-                const targetWidth = Math.min(sourceWidth, 1280);
-                const targetHeight = Math.floor(targetWidth * 0.4); // Plaque format is wide
-                
-                if (targetWidth === 0 || targetHeight === 0) {
-                    console.error('Invalid target dimensions:', targetWidth, targetHeight);
-                    return null;
-                }
-                
-                canvas.width = targetWidth;
-                canvas.height = targetHeight;
+                const size = Math.min(sourceCanvas.width, sourceCanvas.height, 1920);
+                canvas.width = size;
+                canvas.height = size * 0.4; // Plaque format is wide
                 
                 const ctx = canvas.getContext('2d');
-                if (!ctx) {
-                    console.error('Could not get 2D context');
-                    return null;
-                }
                 
                 // Fill white background
                 ctx.fillStyle = 'white';
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
                 
-                // Center crop - plaque is usually in the middle
-                const sx = Math.floor(sourceWidth * 0.1);
-                const sy = Math.floor(sourceHeight * 0.25);
-                const sWidth = Math.floor(sourceWidth * 0.8);
-                const sHeight = Math.floor(sourceHeight * 0.5);
+                // Center crop - plaque is usually in the middle horizontally
+                const sx = sourceCanvas.width * 0.1;
+                const sy = sourceCanvas.height * 0.3;
+                const sWidth = sourceCanvas.width * 0.8;
+                const sHeight = sourceCanvas.height * 0.4;
                 
-                // Ensure valid crop dimensions
-                const validSx = Math.max(0, sx);
-                const validSy = Math.max(0, sy);
-                const validSWidth = Math.min(sWidth, sourceWidth - validSx);
-                const validSHeight = Math.min(sHeight, sourceHeight - validSy);
+                ctx.drawImage(sourceCanvas, sx, sy, sWidth, sHeight, 0, 0, canvas.width, canvas.height);
                 
-                if (validSWidth > 0 && validSHeight > 0) {
-                    ctx.drawImage(sourceCanvas, validSx, validSy, validSWidth, validSHeight, 
-                                  0, 0, canvas.width, canvas.height);
-                } else {
-                    // Fallback: draw entire image scaled
-                    ctx.drawImage(sourceCanvas, 0, 0, canvas.width, canvas.height);
+                // Get image data for processing
+                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                const data = imageData.data;
+                
+                // Convert to grayscale and increase contrast
+                for (let i = 0; i < data.length; i += 4) {
+                    // Grayscale
+                    const gray = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
+                    
+                    // Increase contrast (threshold-like)
+                    const contrast = gray > 100 ? 255 : 0;
+                    
+                    data[i] = contrast;     // R
+                    data[i + 1] = contrast; // G
+                    data[i + 2] = contrast; // B
                 }
                 
-                try {
-                    // Get image data for processing
-                    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                    const data = imageData.data;
-                    
-                    // Convert to grayscale and increase contrast
-                    for (let i = 0; i < data.length; i += 4) {
-                        // Grayscale
-                        const gray = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
-                        
-                        // Increase contrast (threshold-like)
-                        const contrast = gray > 120 ? 255 : 0;
-                        
-                        data[i] = contrast;     // R
-                        data[i + 1] = contrast; // G
-                        data[i + 2] = contrast; // B
-                    }
-                    
-                    ctx.putImageData(imageData, 0, 0);
-                } catch (err) {
-                    console.error('Image processing error:', err);
-                    // Return canvas without processing if getImageData fails
-                }
+                ctx.putImageData(imageData, 0, 0);
                 
                 return canvas;
             },
@@ -517,21 +492,15 @@
                 const container = document.createElement('div');
                 container.style.cssText = 'text-align: center; padding: 1rem;';
                 
-                if (canvas && canvas.width > 0 && canvas.height > 0) {
-                    try {
-                        const img = document.createElement('img');
-                        img.src = canvas.toDataURL('image/jpeg');
-                        img.style.cssText = 'max-width: 100%; border-radius: 8px; margin-bottom: 1rem;';
-                        container.appendChild(img);
-                    } catch (err) {
-                        console.error('Failed to create preview:', err);
-                    }
-                }
+                const img = document.createElement('img');
+                img.src = canvas.toDataURL('image/jpeg');
+                img.style.cssText = 'max-width: 100%; border-radius: 8px; margin-bottom: 1rem;';
                 
                 const msg = document.createElement('p');
-                msg.textContent = '❌ Plaque non détectée. Vérifiez l\'image et saisissez manuellement.';
-                msg.style.color = 'var(--highlight)';
+                msg.textContent = 'Image capturée. Vous pouvez saisir la plaque manuellement.';
+                msg.style.color = 'var(--text-muted)';
                 
+                container.appendChild(img);
                 container.appendChild(msg);
                 preview.appendChild(container);
             },
