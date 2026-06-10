@@ -595,6 +595,10 @@
                     return;
                 }
 
+                // Capture signature as base64
+                const signatureCanvas = document.getElementById('signaturePad');
+                const signatureBase64 = signatureCanvas.toDataURL('image/png');
+
                 // Generate group data
                 const now = new Date();
                 const groupData = {
@@ -608,7 +612,8 @@
                     leaderFirstName,
                     arrivalTime: now.toISOString(),
                     activities: {},
-                    status: 'registered'
+                    status: 'registered',
+                    signature: signatureBase64
                 };
 
                 try {

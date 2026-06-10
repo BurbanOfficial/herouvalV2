@@ -66,12 +66,20 @@
                 <span>Arrivée:</span>
                 <strong id="detailArrival"></strong>
             </div>
+            <div class="validation-row" id="signatureRow" style="display: none;">
+                <span>Signature du responsable:</span>
+                <div id="detailSignature" style="background: white; border-radius: 8px; padding: 0.5rem; display: inline-block;"></div>
+            </div>
+            <div class="validation-row" id="statusRow" style="display: none;">
+                <span>Statut:</span>
+                <strong id="detailStatus" style="color: var(--success);">Payé ✓</strong>
+            </div>
         </section>
 
         <!-- Activités -->
         <section id="activitiesSection" class="form-container hidden">
             <h2 class="mb-2">Activités payantes</h2>
-            <p style="color: var(--text-muted); margin-bottom: 1rem;">
+            <p id="activitiesHint" style="color: var(--text-muted); margin-bottom: 1rem;">
                 Sélectionnez les quantités ou cochez "Groupe complet"
             </p>
 
@@ -79,10 +87,10 @@
                 <!-- Dynamically populated -->
             </div>
 
-            <div class="btn-group">
+            <div class="btn-group" id="actionButtons">
                 <button class="btn btn-outline" id="deselectGroup">Annuler</button>
                 <button class="btn btn-success" id="validatePayment">
-                    ✓ Valider et imprimer le QR code
+                    ✓ Valider et générer le PDF
                 </button>
             </div>
         </section>
@@ -244,6 +252,7 @@
 
             selectGroup(group) {
                 this.selectedGroup = group;
+                const isPaid = group.status === 'paid';
                 
                 // Update UI
                 document.getElementById('groupDetails').classList.remove('hidden');
@@ -264,6 +273,20 @@
                 document.getElementById('detailArrival').textContent = 
                     new Date(group.arrivalTime).toLocaleString('fr-FR');
 
+                // Show signature if exists
+                const signatureRow = document.getElementById('signatureRow');
+                const detailSignature = document.getElementById('detailSignature');
+                if (group.signature) {
+                    signatureRow.style.display = 'flex';
+                    detailSignature.innerHTML = `<img src="${group.signature}" style="max-height: 60px; max-width: 200px;" />`;
+                } else {
+                    signatureRow.style.display = 'none';
+                }
+
+                // Show status if paid
+                const statusRow = document.getElementById('statusRow');
+                statusRow.style.display = isPaid ? 'flex' : 'none';
+
                 // Generate QR code
                 const qrContainer = document.getElementById('selectedQRCode');
                 qrContainer.innerHTML = '';
@@ -276,17 +299,77 @@
                     correctLevel: QRCode.CorrectLevel.H
                 });
 
-                // Reset activity inputs
-                document.querySelectorAll('.activity-input').forEach(input => {
-                    input.value = 0;
-                    input.disabled = false;
-                });
-                document.querySelectorAll('[type="checkbox"]').forEach(cb => cb.checked = false);
+                // Setup activities section based on payment status
+                this.setupActivitiesForGroup(group, isPaid);
 
                 // Re-render list to show selection
                 this.renderGroups(app.groups || []);
                 
                 window.scrollTo(0, document.getElementById('groupDetails').offsetTop - 20);
+            },
+
+            setupActivitiesForGroup(group, isPaid) {
+                const activitiesHint = document.getElementById('activitiesHint');
+                const actionButtons = document.getElementById('actionButtons');
+                
+                if (isPaid) {
+                    // Group already paid - show read-only view
+                    activitiesHint.innerHTML = '<span style="color: var(--success);">✓ Ce groupe est déjà payé et validé. Les informations ne peuvent plus être modifiées.</span>';
+                    activitiesHint.style.color = 'var(--success)';
+                    
+                    // Disable action buttons
+                    actionButtons.style.display = 'none';
+                    
+                    // Show saved activities as read-only
+                    const grid = document.getElementById('activitiesGrid');
+                    grid.innerHTML = '';
+                    
+                    if (group.activities && Object.keys(group.activities).length > 0) {
+                        Object.values(group.activities).forEach(activity => {
+                            const card = document.createElement('div');
+                            card.className = 'activity-card';
+                            card.innerHTML = `
+                                <div class="activity-header">
+                                    <span class="activity-title">${activity.name}</span>
+                                    <span style="color: var(--success);">${activity.quantity} places</span>
+                                </div>
+                                <p style="color: var(--text-muted); font-size: 0.9rem;">Prix unitaire: ${activity.price}€</p>
+                                <p style="color: var(--text-muted); font-size: 0.9rem;">Total: ${activity.quantity * activity.price}€</p>
+                            `;
+                            card.style.opacity = '0.8';
+                            grid.appendChild(card);
+                        });
+                    } else {
+                        grid.innerHTML = '<p style="color: var(--text-muted);">Aucune activité payante sélectionnée</p>';
+                    }
+                    
+                    // Add re-download button
+                    const downloadBtn = document.createElement('button');
+                    downloadBtn.className = 'btn btn-primary btn-block';
+                    downloadBtn.style.marginTop = '1rem';
+                    downloadBtn.innerHTML = '📄 Télécharger le PDF';
+                    downloadBtn.onclick = () => this.generatePDF(group, group.activities || {});
+                    grid.appendChild(downloadBtn);
+                    
+                    // Add back button
+                    const backBtn = document.createElement('button');
+                    backBtn.className = 'btn btn-outline btn-block';
+                    backBtn.style.marginTop = '0.5rem';
+                    backBtn.innerHTML = '← Retour à la liste';
+                    backBtn.onclick = () => this.deselectGroup();
+                    grid.appendChild(backBtn);
+                    
+                } else {
+                    // Group not paid - allow editing
+                    activitiesHint.textContent = 'Sélectionnez les quantités ou cochez "Groupe complet"';
+                    activitiesHint.style.color = 'var(--text-muted)';
+                    
+                    // Show action buttons
+                    actionButtons.style.display = 'flex';
+                    
+                    // Reset and enable activity inputs
+                    this.setupActivities();
+                }
             },
 
             deselectGroup() {
@@ -313,6 +396,16 @@
                     }
                 });
 
+                // Confirm before validation
+                const totalActivities = Object.values(activities).reduce((sum, act) => sum + act.quantity, 0);
+                const confirmMsg = totalActivities > 0 
+                    ? `Confirmer le paiement pour ${totalActivities} places d'activités ?\n\nUne fois validé, vous ne pourrez plus modifier ces informations.`
+                    : `Confirmer le paiement sans activités ?\n\nUne fois validé, vous ne pourrez plus modifier ces informations.`;
+                
+                if (!confirm(confirmMsg)) {
+                    return;
+                }
+
                 try {
                     await app.updateGroup(this.selectedGroup.id, {
                         activities: activities,
@@ -320,77 +413,185 @@
                         paymentTime: new Date().toISOString()
                     });
 
-                    // Generate and print PDF
-                    this.generatePDF(this.selectedGroup, activities);
+                    // Generate and download PDF
+                    await this.generatePDF(this.selectedGroup, activities);
 
-                    app.showToast('Paiement validé et QR code généré', 'success');
+                    app.showToast('✓ Paiement validé et PDF téléchargé', 'success');
                     this.deselectGroup();
                 } catch (err) {
-                    app.showToast('Erreur: ' + err.message, 'error');
+                    app.showToast('❌ Erreur: ' + err.message, 'error');
                 }
             },
 
-            generatePDF(group, activities) {
+            async generatePDF(group, activities) {
                 const { jsPDF } = window.jspdf;
                 const doc = new jsPDF();
-
-                // Header
-                doc.setFontSize(20);
-                doc.text('Hérouval Control - Ticket Groupe', 105, 20, { align: 'center' });
-
-                // Group info
-                doc.setFontSize(12);
-                let y = 40;
                 
-                doc.text(`Groupe: ${group.id}`, 20, y);
+                // Header with branding
+                doc.setFillColor(26, 26, 46); // #1a1a2e
+                doc.rect(0, 0, 210, 30, 'F');
+                doc.setTextColor(255, 255, 255);
+                doc.setFontSize(22);
+                doc.text('Hérouval Control', 105, 15, { align: 'center' });
+                doc.setFontSize(12);
+                doc.text('Ticket Groupe Scolaire', 105, 25, { align: 'center' });
+                
+                // Reset text color
+                doc.setTextColor(0, 0, 0);
+                
+                let y = 45;
+                
+                // Group identification box
+                doc.setFillColor(240, 240, 240);
+                doc.roundedRect(10, y - 5, 190, 25, 3, 3, 'F');
+                doc.setFontSize(16);
+                doc.setFont(undefined, 'bold');
+                doc.text(`Groupe: ${group.id}`, 15, y + 10);
+                doc.setFont(undefined, 'normal');
+                doc.setFontSize(10);
+                doc.setTextColor(100, 100, 100);
+                doc.text(`Plaque: ${group.plateNumber || 'Non spécifiée'}`, 15, y + 20);
+                doc.setTextColor(0, 0, 0);
+                y += 35;
+                
+                // School information
+                doc.setFontSize(14);
+                doc.setFont(undefined, 'bold');
+                doc.text('Informations du groupe', 15, y);
+                doc.setFont(undefined, 'normal');
                 y += 10;
-                doc.text(`École: ${group.schoolName}`, 20, y);
-                y += 10;
-                doc.text(`Ville: ${group.city} (${group.postalCode})`, 20, y);
-                y += 10;
-                doc.text(`Responsable: ${group.leaderFirstName} ${group.leaderLastName}`, 20, y);
-                y += 10;
-                doc.text(`Enfants: ${group.childrenCount} | Accompagnateurs: ${group.adultsCount}`, 20, y);
+                
+                doc.setFontSize(11);
+                doc.text(`École: ${group.schoolName}`, 15, y);
+                y += 7;
+                doc.text(`Adresse: ${group.city} (${group.postalCode})`, 15, y);
+                y += 7;
+                doc.text(`Responsable: ${group.leaderFirstName} ${group.leaderLastName}`, 15, y);
+                y += 7;
+                doc.text(`Composition: ${group.childrenCount} enfants + ${group.adultsCount} accompagnateurs = ${group.childrenCount + group.adultsCount} personnes`, 15, y);
+                y += 7;
+                doc.text(`Arrivée: ${new Date(group.arrivalTime).toLocaleString('fr-FR')}`, 15, y);
                 y += 15;
 
-                // Activities
-                if (Object.keys(activities).length > 0) {
+                // Activities section
+                const activityCount = Object.keys(activities).length;
+                if (activityCount > 0) {
                     doc.setFontSize(14);
-                    doc.text('Activités:', 20, y);
-                    y += 10;
+                    doc.setFont(undefined, 'bold');
+                    doc.text('Activités payantes', 15, y);
+                    doc.setFont(undefined, 'normal');
+                    y += 8;
                     
-                    doc.setFontSize(12);
-                    Object.values(activities).forEach(act => {
-                        doc.text(`- ${act.name}: ${act.quantity} places`, 25, y);
-                        y += 8;
+                    // Table header
+                    doc.setFillColor(230, 230, 230);
+                    doc.rect(15, y - 5, 180, 8, 'F');
+                    doc.setFontSize(10);
+                    doc.setFont(undefined, 'bold');
+                    doc.text('Activité', 20, y);
+                    doc.text('Places', 100, y);
+                    doc.text('Prix/u', 130, y);
+                    doc.text('Total', 160, y);
+                    doc.setFont(undefined, 'normal');
+                    y += 8;
+                    
+                    let grandTotal = 0;
+                    Object.values(activities).forEach((act, index) => {
+                        const actTotal = act.quantity * act.price;
+                        grandTotal += actTotal;
+                        
+                        // Alternate row colors
+                        if (index % 2 === 0) {
+                            doc.setFillColor(245, 245, 245);
+                            doc.rect(15, y - 5, 180, 7, 'F');
+                        }
+                        
+                        doc.text(act.name, 20, y);
+                        doc.text(String(act.quantity), 105, y);
+                        doc.text(`${act.price}€`, 135, y);
+                        doc.text(`${actTotal}€`, 165, y);
+                        y += 7;
                     });
-                    y += 10;
+                    
+                    // Total line
+                    y += 3;
+                    doc.setDrawColor(200, 200, 200);
+                    doc.line(15, y - 3, 195, y - 3);
+                    doc.setFont(undefined, 'bold');
+                    doc.setFontSize(12);
+                    doc.text(`TOTAL: ${grandTotal}€`, 165, y + 5);
+                    doc.setFont(undefined, 'normal');
+                    y += 15;
+                } else {
+                    doc.setFontSize(11);
+                    doc.setTextColor(150, 150, 150);
+                    doc.text('Aucune activité payante', 15, y);
+                    doc.setTextColor(0, 0, 0);
+                    y += 15;
                 }
 
-                // QR Code - generate on canvas first
+                // QR Code section
+                doc.setFontSize(14);
+                doc.setFont(undefined, 'bold');
+                doc.text('QR Code d\'identification', 15, y);
+                doc.setFont(undefined, 'normal');
+                y += 5;
+                
+                // Generate QR
                 const qrCanvas = document.createElement('canvas');
-                new QRCode(qrCanvas, {
-                    text: group.id,
-                    width: 150,
-                    height: 150,
-                    colorDark: '#000000',
-                    colorLight: '#ffffff',
-                    correctLevel: QRCode.CorrectLevel.H
+                await new Promise(resolve => {
+                    new QRCode(qrCanvas, {
+                        text: group.id,
+                        width: 150,
+                        height: 150,
+                        colorDark: '#000000',
+                        colorLight: '#ffffff',
+                        correctLevel: QRCode.CorrectLevel.H
+                    });
+                    setTimeout(resolve, 200);
                 });
-
-                setTimeout(() => {
-                    const qrDataUrl = qrCanvas.toDataURL('image/png');
-                    doc.addImage(qrDataUrl, 'PNG', 75, y, 60, 60);
+                
+                const qrDataUrl = qrCanvas.toDataURL('image/png');
+                doc.addImage(qrDataUrl, 'PNG', 75, y, 60, 60);
+                
+                doc.setFontSize(10);
+                doc.setTextColor(100, 100, 100);
+                doc.text('Présentez ce QR code aux attractions', 105, y + 70, { align: 'center' });
+                doc.setTextColor(0, 0, 0);
+                
+                // Signature section
+                if (group.signature) {
+                    y += 85;
                     
-                    // Footer
-                    doc.setFontSize(10);
-                    doc.text(`Arrivée: ${new Date(group.arrivalTime).toLocaleString('fr-FR')}`, 
-                             105, y + 75, { align: 'center' });
-
-                    // Print
-                    doc.autoPrint({ variant: 'non-conform' });
-                    doc.output('dataurlnewwindow');
-                }, 100);
+                    // Check if there's enough space, add page if needed
+                    if (y > 250) {
+                        doc.addPage();
+                        y = 20;
+                    }
+                    
+                    doc.setFontSize(14);
+                    doc.setFont(undefined, 'bold');
+                    doc.text('Signature du responsable', 15, y);
+                    doc.setFont(undefined, 'normal');
+                    y += 5;
+                    
+                    // Add signature image
+                    try {
+                        doc.addImage(group.signature, 'PNG', 15, y, 80, 40);
+                    } catch (err) {
+                        console.error('Error adding signature:', err);
+                    }
+                    y += 45;
+                }
+                
+                // Footer
+                const now = new Date();
+                doc.setFontSize(9);
+                doc.setTextColor(150, 150, 150);
+                doc.text(`Document généré le ${now.toLocaleString('fr-FR')} - Hérouval Control`, 105, 285, { align: 'center' });
+                
+                // Download PDF with filename
+                const filename = `${group.id.replace('#', '')}_Hérouval.pdf`;
+                doc.save(filename);
             }
         };
 
