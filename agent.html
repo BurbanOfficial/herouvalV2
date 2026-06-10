@@ -376,26 +376,41 @@
 
             preprocessImage(sourceCanvas) {
                 const canvas = document.createElement('canvas');
-                const size = Math.min(sourceCanvas.width, sourceCanvas.height, 1920);
-                canvas.width = size;
-                canvas.height = size * 0.4; // Plaque format is wide
+                
+                // Ensure valid dimensions
+                let srcWidth = sourceCanvas.width || 1280;
+                let srcHeight = sourceCanvas.height || 720;
+                
+                if (srcWidth === 0 || srcHeight === 0) {
+                    srcWidth = 1280;
+                    srcHeight = 720;
+                }
+                
+                const size = Math.min(srcWidth, srcHeight, 1920);
+                const destWidth = Math.max(1, Math.floor(size));
+                const destHeight = Math.max(1, Math.floor(size * 0.4)); // Plaque format is wide
+                
+                canvas.width = destWidth;
+                canvas.height = destHeight;
                 
                 const ctx = canvas.getContext('2d');
                 
                 // Fill white background
                 ctx.fillStyle = 'white';
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillRect(0, 0, destWidth, destHeight);
                 
                 // Center crop - plaque is usually in the middle horizontally
-                const sx = sourceCanvas.width * 0.1;
-                const sy = sourceCanvas.height * 0.3;
-                const sWidth = sourceCanvas.width * 0.8;
-                const sHeight = sourceCanvas.height * 0.4;
+                const sx = Math.floor(srcWidth * 0.1);
+                const sy = Math.floor(srcHeight * 0.3);
+                const sWidth = Math.floor(srcWidth * 0.8);
+                const sHeight = Math.floor(srcHeight * 0.4);
                 
-                ctx.drawImage(sourceCanvas, sx, sy, sWidth, sHeight, 0, 0, canvas.width, canvas.height);
+                ctx.drawImage(sourceCanvas, sx, sy, sWidth, sHeight, 0, 0, destWidth, destHeight);
                 
-                // Get image data for processing
-                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                // Get image data for processing (ensure valid dimensions)
+                const safeWidth = Math.min(destWidth, canvas.width);
+                const safeHeight = Math.min(destHeight, canvas.height);
+                const imageData = ctx.getImageData(0, 0, safeWidth, safeHeight);
                 const data = imageData.data;
                 
                 // Convert to grayscale and increase contrast
@@ -556,9 +571,24 @@
 
                 // Check signature
                 const canvas = document.getElementById('signaturePad');
+                if (!canvas || canvas.width === 0 || canvas.height === 0) {
+                    app.showToast('Erreur: canvas de signature non initialisé', 'error');
+                    return;
+                }
+                
                 const ctx = canvas.getContext('2d');
-                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                const hasSignature = imageData.data.some(channel => channel !== 0);
+                let hasSignature = false;
+                
+                try {
+                    const safeWidth = Math.max(1, canvas.width);
+                    const safeHeight = Math.max(1, canvas.height);
+                    const imageData = ctx.getImageData(0, 0, safeWidth, safeHeight);
+                    hasSignature = imageData.data.some(channel => channel !== 0);
+                } catch (err) {
+                    console.error('Error checking signature:', err);
+                    // Assume no signature if we can't read the canvas
+                    hasSignature = false;
+                }
 
                 if (!hasSignature) {
                     app.showToast('La signature est obligatoire', 'error');
