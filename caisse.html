@@ -100,12 +100,16 @@
                 <!-- Dynamically populated -->
             </div>
 
+        </section>
+
+        <!-- Boutons d'action (hors du cadre des activités) -->
+        <section id="actionButtonsSection" class="hidden">
             <div class="btn-group" id="actionButtons">
                 <button class="btn btn-outline" id="deselectGroup">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="vertical-align: middle; margin-right: 0.5rem;">
                         <path d="M19 12H5M12 19l-7-7 7-7"/>
                     </svg>
-                    Retour
+                    Retour à la liste
                 </button>
                 <button class="btn btn-success" id="validatePayment">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 0.5rem;">
@@ -114,6 +118,24 @@
                     Valider et générer le PDF
                 </button>
             </div>
+        </section>
+
+        <!-- Boutons pour groupes payés (hors du cadre) -->
+        <section id="paidButtonsSection" class="hidden">
+            <button class="btn btn-primary btn-block" id="downloadPDF">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="vertical-align: middle; margin-right: 0.5rem;">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    <polyline points="7 10 12 15 17 10"/>
+                    <line x1="12" y1="15" x2="12" y2="3"/>
+                </svg>
+                Télécharger le PDF
+            </button>
+            <button class="btn btn-outline btn-block" id="backToList" style="margin-top: 0.5rem;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="vertical-align: middle; margin-right: 0.5rem;">
+                    <path d="M19 12H5M12 19l-7-7 7-7"/>
+                </svg>
+                Retour à la liste
+            </button>
         </section>
     </div>
 
@@ -308,6 +330,7 @@
                 // Show group details and activities
                 document.getElementById('groupDetails').classList.remove('hidden');
                 document.getElementById('activitiesSection').classList.remove('hidden');
+                document.getElementById('actionButtonsSection').classList.remove('hidden');
 
                 // Fill details
                 document.getElementById('selectedGroupId').textContent = group.id;
@@ -368,8 +391,15 @@
                     activitiesHint.innerHTML = '<span style="color: #22c55e;">Ce groupe est déjà payé et validé. Les informations ne peuvent plus être modifiées.</span>';
                     activitiesHint.style.color = 'var(--success)';
                     
-                    // Disable action buttons
-                    actionButtons.style.display = 'none';
+                    // Hide regular action buttons section
+                    document.getElementById('actionButtonsSection').classList.add('hidden');
+                    
+                    // Show paid buttons section
+                    document.getElementById('paidButtonsSection').classList.remove('hidden');
+                    
+                    // Setup paid buttons handlers
+                    document.getElementById('downloadPDF').onclick = () => this.generatePDF(group, group.activities || {});
+                    document.getElementById('backToList').onclick = () => this.deselectGroup();
                     
                     // Show saved activities as read-only
                     const grid = document.getElementById('activitiesGrid');
@@ -394,41 +424,14 @@
                         grid.innerHTML = '<p style="color: var(--text-muted);">Aucune activité payante sélectionnée</p>';
                     }
                     
-                    // Add re-download button
-                    const downloadBtn = document.createElement('button');
-                    downloadBtn.className = 'btn btn-primary btn-block';
-                    downloadBtn.style.marginTop = '1rem';
-                    downloadBtn.innerHTML = `
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="vertical-align: middle; margin-right: 0.5rem;">
-                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                            <polyline points="7 10 12 15 17 10"/>
-                            <line x1="12" y1="15" x2="12" y2="3"/>
-                        </svg>
-                        Télécharger le PDF
-                    `;
-                    downloadBtn.onclick = () => this.generatePDF(group, group.activities || {});
-                    grid.appendChild(downloadBtn);
-                    
-                    // Add back button
-                    const backBtn = document.createElement('button');
-                    backBtn.className = 'btn btn-outline btn-block';
-                    backBtn.style.marginTop = '0.5rem';
-                    backBtn.innerHTML = `
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="vertical-align: middle; margin-right: 0.5rem;">
-                            <path d="M19 12H5M12 19l-7-7 7-7"/>
-                        </svg>
-                        Retour à la liste
-                    `;
-                    backBtn.onclick = () => this.deselectGroup();
-                    grid.appendChild(backBtn);
-                    
                 } else {
                     // Group not paid - allow editing
                     activitiesHint.textContent = 'Sélectionnez les quantités ou cochez "Groupe enfants complet"';
                     activitiesHint.style.color = 'var(--text-muted)';
                     
-                    // Show action buttons
-                    actionButtons.style.display = 'flex';
+                    // Show action buttons section
+                    document.getElementById('actionButtonsSection').classList.remove('hidden');
+                    document.getElementById('paidButtonsSection').classList.add('hidden');
                     
                     // Reset and enable activity inputs
                     this.setupActivities();
@@ -439,6 +442,8 @@
                 this.selectedGroup = null;
                 document.getElementById('groupDetails').classList.add('hidden');
                 document.getElementById('activitiesSection').classList.add('hidden');
+                document.getElementById('actionButtonsSection').classList.add('hidden');
+                document.getElementById('paidButtonsSection').classList.add('hidden');
                 
                 // Show pending and validated sections again
                 document.getElementById('pendingSection').classList.remove('hidden');
